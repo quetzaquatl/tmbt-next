@@ -1,6 +1,5 @@
 // TMBT Next compatibility + live-desk hardening for the original Studio 4.6 pipeline.
-// The UI stays modern, while data semantics remain the original ones:
-// Twelve QQQ -> NQ context, Twelve SPY -> ES context, Twelve XAU/USD -> XAU.
+// The UI stays modern, while data semantics remain the original ones.
 
 let originalFeedFresh = null;
 let originalFeedMeta = null;
@@ -68,9 +67,6 @@ function resetInspectorUi(){
   const st=document.querySelector("#selectedState");if(st)st.textContent="—";
 }
 
-// Manual market changes must not leave setup levels from another instrument on
-// the chart. This was easy to miss in the first preview and is dangerous in a
-// live decision desk.
 setMarket = function(m){
   if(state.selectedModel && String(state.selectedModel.market)!==String(m))resetInspectorUi();
   state.market=m;
@@ -101,8 +97,6 @@ function barsSignature(bars){
   return [bars.length,z.t,z.o,z.h,z.l,z.c].join("|");
 }
 
-// Replace the base loader: no loading overlay on every 5-second refresh, no
-// needless redraw when nothing changed, and feed freshness is explicit.
 loadBars = async function(force=false){
   if(state.mode === "snapshot") return;
   const key=`${state.market}|${state.tf}`;
@@ -159,6 +153,12 @@ async function pollFeedStatus(){
         b.textContent=meta?.ok?(meta.stale?`STALE ${ageText(meta.age_seconds)}`:`LIVE ${ageText(meta.age_seconds)}`):"NO FEED";
         b.className=`feed-mini ${feedClass(meta)}`;
         b.title=meta?.note||"";
+      }
+      const small=document.querySelector(`.quotes>div[data-goto="${m}"] small`);
+      if(small && small.firstChild){
+        const identity=meta?.tickerid||meta?.ticker||m;
+        const provider=meta?.provider||"auto";
+        small.firstChild.nodeValue=`${identity} · ${provider} `;
       }
     }
     enforceOriginalFeedHealth();
@@ -220,12 +220,14 @@ function detectModelTransitions(){
 function renderDiagnostics(d){
   const host=document.querySelector("#systemView");if(!host)return;
   const markets=["NQ","ES","XAU"];
-  let html='<div class="diag-head"><div><b>Original Pipeline Diagnostics</b><small>Feed, Workspace und Datenalter</small></div><button id="diagRefresh">Neu prüfen</button></div>';
+  let html='<div class="diag-head"><div><b>Original Pipeline Diagnostics</b><small>Feed, Studio-Funktionen, Workspace und Datenalter</small></div><button id="diagRefresh">Neu prüfen</button></div>';
   html+='<div class="diag-grid">';
   for(const m of markets){
     const f=d.feeds?.[m]?.["5m"]||{};
     html+=`<div class="diag-card ${f.stale?"stale":"fresh"}"><div class="model-row"><h4>${esc(m)}</h4><span class="pill ${f.stale?"expired":"signal"}">${f.stale?"STALE":"LIVE"}</span></div><b>${f.price==null?"—":fmt(f.price,2)}</b><small>${esc(f.note||"")}</small><p>5m last: ${esc(f.last_bar_utc||"—")}</p><p>source: ${esc(f.feed||"—")}</p></div>`;
   }
+  html+='</div><h4>Studio-Funktionen</h4><div class="feature-checks">';
+  for(const f of d.features||[]){const s=String(f.status||"WARN").toUpperCase();html+=`<div class="feature-row"><span class="status-dot ${s==="PASS"?"ok":s==="FAIL"?"bad":"warn"}"></span><b>${esc(f.name||"")}</b><span class="feature-status ${s.toLowerCase()}">${s}</span><small>${esc(f.detail||"")}</small></div>`}
   html+='</div><h4>Timeframes</h4><table class="table diag-table"><thead><tr><th>Market</th><th>TF</th><th>Status</th><th>Price</th><th>Age</th><th>Feed</th><th>Last bar UTC</th></tr></thead><tbody>';
   for(const m of markets){for(const tf of ["5m","15m","1H","4H","1D"]){const f=d.feeds?.[m]?.[tf]||{};html+=`<tr><td>${m}</td><td>${tf}</td><td class="${f.stale?"bad":"good"}">${f.stale?"STALE":"LIVE"}</td><td>${f.price==null?"—":fmt(f.price,2)}</td><td>${ageText(f.age_seconds)}</td><td>${esc(f.feed||"—")}</td><td>${esc(f.last_bar_utc||"—")}</td></tr>`}}
   html+='</tbody></table><h4>Workspace</h4><div class="component-grid">';
@@ -241,8 +243,6 @@ async function pollDiagnostics(){
   try{const d=await api("/api/diagnostics");if(host)host.dataset.loaded="1";renderDiagnostics(d)}catch(e){if(host)host.innerHTML=`<div class="empty bad">Diagnose fehlgeschlagen: ${esc(e)}</div>`}
 }
 
-// Persist panel sizing/collapse state. The old preview forgot every layout after
-// a restart, which made repeated live use unnecessarily tedious.
 function saveLayout(){
   try{localStorage.setItem("tmbt-next-layout",JSON.stringify({left:getComputedStyle(document.documentElement).getPropertyValue("--left"),right:getComputedStyle(document.documentElement).getPropertyValue("--right"),bottom:getComputedStyle(document.documentElement).getPropertyValue("--bottom"),lc:document.body.classList.contains("left-collapsed"),rc:document.body.classList.contains("right-collapsed"),bc:document.body.classList.contains("bottom-collapsed")}))}catch{}
 }
@@ -253,11 +253,8 @@ restoreLayout();
 window.addEventListener("mouseup",()=>setTimeout(saveLayout,20));
 for(const id of ["#leftHide","#rightHide","#bottomHide"]){document.querySelector(id)?.addEventListener("click",()=>setTimeout(saveLayout,50))}
 
-// System tab was added after the original event model; its normal tab switching
-// still comes from app.js, this only starts the diagnostic request.
 document.querySelector('[data-tab="system"]')?.addEventListener("click",pollDiagnostics);
 
-// Useful desk shortcuts without stealing keystrokes from filter fields.
 window.addEventListener("keydown",e=>{
   if(["INPUT","SELECT","TEXTAREA"].includes(document.activeElement?.tagName))return;
   if(e.key==="Escape" && state.mode==="snapshot")backLive();
@@ -267,8 +264,6 @@ window.addEventListener("keydown",e=>{
   if(e.key==="3")setMarket("XAU");
 });
 
-// Reload immediately through the hardened loader, then keep independent health
-// and model-state watches. Base polling continues to serve paper/research data.
 if(state.mode === "live"){
   loadBars(true);
   loadPD();
