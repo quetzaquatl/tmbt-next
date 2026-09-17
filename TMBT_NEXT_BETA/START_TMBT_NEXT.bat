@@ -7,17 +7,17 @@ set "TMBT_NEXT_PORT=8510"
 
 echo.
 echo =========================================
-echo TMBT NEXT BETA 0.9.16 DIRECTION LOCK
+echo TMBT NEXT BETA 0.9.17 VISUAL DESK
 echo =========================================
 echo Workspace: %TMBT_WORKSPACE%
 echo URL: http://127.0.0.1:%TMBT_NEXT_PORT%
-echo Active tab: only fresh, in-session actionable models.
-echo Monitor tab: background / wait / idle / expired / proxy / stale.
+echo Active: setup cards with semantic status and direction colors.
+echo Monitor: background / wait / idle / expired / proxy / stale.
+echo Secondary tools: Outcomes / Paper / System / Logs moved behind More.
 echo Notifications: persistent local history for model, research and system alerts.
-echo Direction safety: simultaneous LONG + SHORT iFVG on same market = both blocked.
-echo HTF bias: no EMA / no indicator heuristic; price-action HTF rule to be defined.
+echo Direction safety: simultaneous opposite iFVGs on one market are blocked.
+echo HTF bias: no EMA / no indicator heuristic; price-action rule still pending.
 echo EBP matrix: NQ / ES x 15m / 30m / 1H
-echo Closed-bar evaluator active; 4-bar retest window; 2R target.
 echo Feed priority: true NQ/ES futures mirror -^> QQQ/SPY monitoring-only fallback.
 echo Safety: proxy or stale feeds cannot fire live alerts.
 echo Preflight endpoint: http://127.0.0.1:%TMBT_NEXT_PORT%/api/preflight
