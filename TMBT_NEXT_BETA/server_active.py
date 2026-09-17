@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 import context_factors
 import server_ready as ready
@@ -29,17 +29,37 @@ def _is_ifvg(m):
     return "IFVG" in text or "SILVER" in text
 
 
+def _cfg(target: str):
+    target = str(target or "NQ").upper()
+    peer = "ES" if target == "NQ" else "NQ"
+    return context_factors.ContextConfig(target_market=target, peer_market=peer)
+
+
+def _apply_market_context(models, target):
+    idx = [(i, m) for i, m in enumerate(models) if str(m.get("market") or "").upper() == target]
+    if not idx:
+        return models
+    filtered, _ctx = context_factors.apply_to_models([m for _, m in idx], ready.ready_query, _cfg(target))
+    out = list(models)
+    for (i, _), m in zip(idx, filtered):
+        out[i] = m
+    return out
+
+
 def context_locked_models():
-    """Apply NQ/ES price-action context before exposing active iFVG setups.
+    """Apply target-relative NQ/ES price-action context before active iFVGs.
 
     Hierarchy:
-      SMT target-relative veto -> PO3 -> Asia/Midnight context -> iFVG entry.
+      target-relative SMT veto -> target PO3 -> Asia/Midnight context -> iFVG entry.
 
-    If no directional context is confirmed, the older safety remains in place:
-    simultaneous opposite active iFVG directions on one market are both blocked.
+    NQ and ES are evaluated separately. For example, ES sweeping a low while NQ
+    holds can be bullish for NQ without blindly imposing the same bias on ES.
+    If neither market has confirmed direction, the older opposite-direction
+    safety remains in place.
     """
-    base = [deepcopy(m) for m in (_base_ready_models() or [])]
-    models, _ctx = context_factors.apply_to_models(base, ready.ready_query)
+    models = [deepcopy(m) for m in (_base_ready_models() or [])]
+    models = _apply_market_context(models, "NQ")
+    models = _apply_market_context(models, "ES")
 
     active = {}
     for m in models:
@@ -76,7 +96,11 @@ class Handler(ready.Handler):
     def do_GET(self):
         u = urlparse(self.path)
         if u.path in {"/api/context", "/api/context-bias"}:
-            return self.json(context_factors.build_context(ready.ready_query))
+            q = parse_qs(u.query)
+            target = str(q.get("market", ["NQ"])[0]).upper()
+            if target not in {"NQ", "ES"}:
+                target = "NQ"
+            return self.json(context_factors.build_context(ready.ready_query, _cfg(target)))
         return super().do_GET()
 
 
@@ -89,11 +113,12 @@ if __name__ == "__main__":
     print("SMT veto: peer liquidity raid while target holds can block the opposite NQ/ES direction")
     print("PO3: ordered Asia manipulation/reclaim and distribution state is point-in-time only")
     print("Midnight/Asia: stored as explicit context fields for later backtest linkage")
+    print("NQ and ES context are evaluated separately; no shared one-size-fits-all bias")
     print("Fallback safety: opposite active iFVGs are both blocked when context stays neutral")
     print("EBP matrix: NQ/ES x 15m/30m/1H · closed-bar evaluator active")
     print("Feed priority: TRUE FUTURES mirror -> QQQ/SPY monitoring-only fallback")
     print("Safety: proxy/stale/out-of-session models cannot enter Active Now")
-    print("Context: http://127.0.0.1:%s/api/context" % core.PORT)
+    print("Context: http://127.0.0.1:%s/api/context?market=NQ" % core.PORT)
     print("Preflight: http://127.0.0.1:%s/api/preflight" % core.PORT)
     print("Open: http://127.0.0.1:%s" % core.PORT)
     try:
