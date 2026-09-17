@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import server as core
 
 # Compatibility layer for the original TMBT 4.6 live-data architecture.
 # No Yahoo/GC proxy or other external fallback is used here. TMBT Next reads
 # the same Twelve-generated live JSON mirror used by the original Studio and
-# falls back to the local SQLite cache only when that mirror is unavailable.
+# falls back to the local SQLite cache when it is newer or the mirror is absent.
 
 _LOCAL_SQLITE_QUERY = core.query_bars
 
@@ -18,6 +19,14 @@ _TF_FILE = {
     "1h": "1H",
     "4h": "4H",
     "1d": "1D",
+}
+
+_STALE_AFTER = {
+    "5m": 20 * 60,
+    "15m": 45 * 60,
+    "1h": 3 * 60 * 60,
+    "4h": 9 * 60 * 60,
+    "1d": 48 * 60 * 60,
 }
 
 
@@ -50,7 +59,9 @@ def _age_text(age):
         return f"{int(age)}s"
     if age < 7200:
         return f"{int(age // 60)}m"
-    return f"{age / 3600:.1f}h"
+    if age < 172800:
+        return f"{age / 3600:.1f}h"
+    return f"{age / 86400:.1f}d"
 
 
 def _twelve_roots():
@@ -127,8 +138,6 @@ def _load_twelve_file(market="NQ", tf="1H", limit=500):
 
     now = datetime.now(timezone.utc)
     age = (now - latest_received).total_seconds() if latest_received else None
-    # The original writer refreshes the active JSON series frequently even for
-    # higher chart timeframes, so writer/receive time is the correct heartbeat.
     stale = age is None or age > 180
     ticker = payload.get("ticker") or ""
     tickerid = payload.get("tickerid") or ""
@@ -139,8 +148,6 @@ def _load_twelve_file(market="NQ", tf="1H", limit=500):
         "bars": bars,
         "db": str(path) if path else None,
         "table": None,
-        # Keep source null so the existing UI uses note verbatim instead of
-        # automatically appending the misleading 'lokaler Cache' suffix.
         "source": None,
         "feed": "original_twelve",
         "provider": payload.get("source") or "twelve",
@@ -165,45 +172,53 @@ def _latest_ms(result):
         return -1
 
 
-def _decorate_local(local):
+def _decorate_local(local, market="NQ", tf="1H"):
     local = dict(local or {})
-    src = local.get("source") or "local"
-    age = None
+    bars = local.get("bars") or []
+    if not bars:
+        return local
+
+    ntf = core.normalize_tf(tf)
+    last = bars[-1]
+    last_ms = _to_ms(last.get("close_t")) or _to_ms(last.get("t"))
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    bar_age = max(0.0, (now_ms - last_ms) / 1000.0) if last_ms else None
+
+    # File mtime catches a writer that keeps the active candle open; candle age
+    # catches a database file that is touched for unrelated series only.
+    file_age = None
     db = local.get("db")
     try:
         if db:
-            age = max(0.0, datetime.now(timezone.utc).timestamp() - Path(db).stat().st_mtime)
+            file_age = max(0.0, datetime.now(timezone.utc).timestamp() - Path(db).stat().st_mtime)
     except Exception:
-        age = None
-    stale = age is None or age > 180
+        file_age = None
+
+    stale_after = _STALE_AFTER.get(ntf, 3 * 60 * 60)
+    stale = bar_age is None or bar_age > stale_after
+    src = local.get("source") or last.get("source") or "local"
     local["feed"] = "original_sqlite"
     local["provider"] = src
     local["source"] = None
-    local["age_seconds"] = age
+    local["last_bar_utc"] = datetime.fromtimestamp(last_ms / 1000.0, tz=timezone.utc).isoformat() if last_ms else None
+    local["age_seconds"] = bar_age
+    local["file_age_seconds"] = file_age
     local["stale"] = stale
-    local["note"] = f"{src} · original local feed · {'STALE' if stale else 'LIVE'} · age {_age_text(age)}"
+    local["note"] = f"{src} · original local feed · {'STALE' if stale else 'LIVE'} · bar age {_age_text(bar_age)}"
     return local
 
 
 def original_query_bars(market="NQ", tf="1H", limit=500, source=None):
-    # First choice: exactly the Twelve live-series mirror used by Studio 4.6.
     original = _load_twelve_file(market, tf, limit)
-
-    # Second choice: the original local SQLite cache. This preserves old
-    # workspaces that predate the GitHub live mirror and provides continuity if
-    # the mirror is temporarily missing.
-    local = _LOCAL_SQLITE_QUERY(market, tf, limit, source)
-    local = dict(local or {})
+    local = _decorate_local(_LOCAL_SQLITE_QUERY(market, tf, limit, source), market, tf)
 
     if original and original.get("bars"):
-        # Prefer the original Twelve mirror. If SQLite contains a later bar,
-        # use it because it is likely the same original writer before sync lag.
         if local.get("bars") and _latest_ms(local) > _latest_ms(original):
-            return _decorate_local(local)
+            return local
         return original
 
     if local.get("bars"):
-        return _decorate_local(local)
+        return local
 
     return {
         "bars": [],
@@ -212,13 +227,76 @@ def original_query_bars(market="NQ", tf="1H", limit=500, source=None):
         "source": None,
         "feed": "original_twelve",
         "stale": True,
+        "age_seconds": None,
         "note": "Kein Original-Livefeed gefunden · Twelve writer/Sync prüfen",
     }
 
 
-# /api/bars and /api/pd resolve this symbol in server.py at request time.
+def _feed_one(market, tf="5m"):
+    x = original_query_bars(market, tf, 40, None)
+    bars = x.get("bars") or []
+    last = bars[-1] if bars else {}
+    return {
+        "market": market,
+        "tf": tf,
+        "ok": bool(bars),
+        "price": last.get("c"),
+        "bars": len(bars),
+        "feed": x.get("feed"),
+        "provider": x.get("provider"),
+        "ticker": x.get("ticker"),
+        "tickerid": x.get("tickerid"),
+        "last_bar_utc": x.get("last_bar_utc"),
+        "last_received_at_utc": x.get("last_received_at_utc"),
+        "age_seconds": x.get("age_seconds"),
+        "file_age_seconds": x.get("file_age_seconds"),
+        "stale": bool(x.get("stale", not bool(bars))),
+        "note": x.get("note"),
+        "path": x.get("db"),
+    }
+
+
+def feed_status():
+    return {
+        "generated_at_utc": core.now_iso(),
+        "markets": {m: _feed_one(m, "5m") for m in ("NQ", "ES", "XAU")},
+    }
+
+
+def diagnostics():
+    feeds = {}
+    for m in ("NQ", "ES", "XAU"):
+        feeds[m] = {tf: _feed_one(m, tf) for tf in ("5m", "15m", "1H", "4H", "1D")}
+    components = {}
+    for name in ("live_data", "live_signals", "paper_account", "research_jobs", "github_research_repo"):
+        p = core.WORKSPACE / name
+        try:
+            mtime = datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc).isoformat() if p.exists() else None
+        except Exception:
+            mtime = None
+        components[name] = {"exists": p.exists(), "path": str(p), "mtime_utc": mtime}
+    return {
+        "version": core.APP_VERSION,
+        "generated_at_utc": core.now_iso(),
+        "workspace": str(core.WORKSPACE),
+        "components": components,
+        "feeds": feeds,
+        "hint": "Wenn nur XAU stale ist, läuft die UI korrekt; dann den ursprünglichen Twelve/XAU-Writer im Workspace prüfen.",
+    }
+
+
 core.query_bars = original_query_bars
-core.APP_VERSION = "0.9.3-beta-original-pipeline"
+core.APP_VERSION = "0.9.4-beta-original-pipeline"
+
+
+class Handler(core.Handler):
+    def do_GET(self):
+        u = urlparse(self.path)
+        if u.path == "/api/feed-status":
+            return self.json(feed_status())
+        if u.path == "/api/diagnostics":
+            return self.json(diagnostics())
+        return super().do_GET()
 
 
 if __name__ == "__main__":
@@ -229,7 +307,7 @@ if __name__ == "__main__":
     print("No Yahoo/GC proxy fallback enabled.")
     print("Open: http://127.0.0.1:%s" % core.PORT)
     try:
-        core.ThreadingHTTPServer(("127.0.0.1", core.PORT), core.Handler).serve_forever()
+        core.ThreadingHTTPServer(("127.0.0.1", core.PORT), Handler).serve_forever()
     finally:
         try:
             core.PID_FILE.unlink(missing_ok=True)
