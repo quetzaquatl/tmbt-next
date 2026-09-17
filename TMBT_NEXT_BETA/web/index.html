@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TMBT Next</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="compat.css"><link rel="stylesheet" href="layout_fix.css"><link rel="stylesheet" href="active_desk.css">
+<title>TMBT Next</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="compat.css"><link rel="stylesheet" href="layout_fix.css"><link rel="stylesheet" href="active_desk.css"><link rel="stylesheet" href="notification_center.css">
 </head>
 <body>
 <div id="app">
@@ -15,7 +15,7 @@
     <button data-tf="5m">5m</button><button data-tf="15m">15m</button><button data-tf="30m">30m</button><button data-tf="1H" class="active">1H</button><button data-tf="4H">4H</button><button data-tf="1D">1D</button>
   </div>
   <div class="spacer"></div>
-  <button id="alertsBtn" class="ghost">🔔 Alerts</button>
+  <button id="alertsBtn" class="ghost">🔔 Notifications</button>
   <a class="button ghost old-studio" href="http://127.0.0.1:8502" target="_blank">Old Studio ↗</a>
   <div class="health"><span><i id="liveDot"></i>Feed</span><span><i id="paperDot"></i>Paper</span><span><i id="researchDot"></i>Research</span></div>
 </header>
@@ -99,6 +99,14 @@
     <div class="tab" id="tab-logs"><pre id="logs">TMBT Next gestartet.</pre></div>
   </div>
 </section>
+
+<div id="notificationShade" class="notification-shade"></div>
+<aside id="notificationDrawer" class="notification-drawer" aria-hidden="true">
+  <div class="notif-head"><div><b>Notifications</b><small>letzte Modell-, Research- und Systemmeldungen</small></div><button id="notificationClear" class="ghost">Leeren</button><button id="notificationClose" class="ghost">✕</button></div>
+  <div class="notif-toolbar"><button id="notificationPermission" class="ghost">Browser-Alerts aktivieren</button><div class="spacer"></div><span id="notificationPermissionState" class="notif-permission">—</span></div>
+  <div id="notificationList" class="notif-list"></div>
+  <div id="notificationFoot" class="notif-foot"></div>
+</aside>
 <div id="toast"></div>
 <script src="app.js"></script>
 <script src="original_compat.js"></script>
@@ -107,4 +115,5 @@
 <script src="chart_pan_patch.js"></script>
 <script src="feed_gate_patch.js"></script>
 <script src="active_desk.js"></script>
+<script src="notification_center.js"></script>
 </body></html>
