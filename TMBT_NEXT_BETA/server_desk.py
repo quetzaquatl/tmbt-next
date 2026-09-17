@@ -31,6 +31,12 @@ def _robust_to_ms(v):
 original._to_ms = _robust_to_ms
 original._STALE_AFTER["30m"] = 75 * 60
 
+_EXPECTED_IDENTITY = {
+    "NQ": "QQQ",
+    "ES": "SPY",
+    "XAU": "XAU/USD",
+}
+
 
 def _aggregate_30m(bars):
     """Build deterministic 30m candles from the canonical 15m series."""
@@ -77,10 +83,28 @@ def _aggregate_30m(bars):
     return out
 
 
+def _identity_matches(market: str, result: dict) -> bool:
+    """Reject a mirror that explicitly identifies as the wrong instrument.
+
+    Empty identity fields are tolerated because older mirror files did not always
+    populate ticker/tickerid. If an identity is present, however, it must match
+    the prototype scale used by the live models.
+    """
+    expected = _EXPECTED_IDENTITY.get(str(market).upper())
+    if not expected:
+        return True
+    identity = str(result.get("tickerid") or result.get("ticker") or "").upper().replace(" ", "")
+    if not identity:
+        return True
+    if expected == "XAU/USD":
+        return "XAU/USD" in identity or "XAUUSD" in identity
+    return expected in identity
+
+
 def _canonical_mirror(market="NQ", tf="1H", limit=500):
     """Read exactly the same Twelve mirror the old Studio publishes.
 
-    NQ/ES are the old Studio's QQQ/SPY prototypes. Keeping this as the primary
+    NQ/ES are the old Studio's QQQ/SPY prototypes. Keeping this as the only chart
     source is important because the live model engine uses the same price scale.
     """
     result = original._load_twelve_file(market, tf, limit)
@@ -91,10 +115,21 @@ def _canonical_mirror(market="NQ", tf="1H", limit=500):
     age = result.get("age_seconds")
     stale_after = original._STALE_AFTER.get(ntf, 3 * 60 * 60)
     result["stale"] = age is None or float(age) > stale_after
-    state = "STALE" if result["stale"] else "LIVE"
-    identity = result.get("tickerid") or result.get("ticker") or str(market).upper()
-    result["note"] = f"twelve · {identity} · {state} · age {original._age_text(age)}"
     result["canonical"] = True
+    result["identity_ok"] = _identity_matches(str(market).upper(), result)
+
+    identity = result.get("tickerid") or result.get("ticker") or str(market).upper()
+    if not result["identity_ok"]:
+        result["stale"] = True
+        result["note"] = (
+            f"MODEL/CHART FEED MISMATCH · expected {_EXPECTED_IDENTITY.get(str(market).upper())} "
+            f"· got {identity} · chart blocked"
+        )
+        result["bars"] = []
+        return result
+
+    state = "STALE" if result["stale"] else "LIVE"
+    result["note"] = f"twelve · {identity} · {state} · age {original._age_text(age)}"
     return result
 
 
@@ -103,29 +138,24 @@ def _canonical_query(market="NQ", tf="1H", limit=500, source=None):
     if mirror:
         return mirror
 
-    # Only fall back when the canonical Twelve mirror is actually absent.
-    # This avoids mixing a real NQ/ES series with the QQQ/SPY model scale.
-    local = original._decorate_local(
-        original._LOCAL_SQLITE_QUERY(market, tf, limit, source), market, tf
-    )
-    if local.get("bars"):
-        local["canonical"] = False
-        local["note"] = (local.get("note") or "local fallback") + " · FALLBACK (mirror missing)"
-        return local
-
+    # Deliberately do not fall back to anonymous/local futures tables here.
+    # A fresh NQ future (~30k) beside a QQQ-based model (~700) is worse than a
+    # clearly unavailable chart because Entry/SL/TP would be plotted on the wrong
+    # price scale. Old Studio Twelve mirror is therefore the sole chart source.
     return {
         "bars": [],
         "db": None,
         "table": None,
         "source": None,
-        "feed": "original_pipeline",
+        "feed": "canonical_twelve_only",
         "provider": None,
         "ticker": None,
         "tickerid": None,
         "stale": True,
         "age_seconds": None,
-        "canonical": False,
-        "note": "Kein kanonischer Twelve-Mirror gefunden · Old Studio/Sync prüfen",
+        "canonical": True,
+        "identity_ok": None,
+        "note": "Kanonischer Twelve-Mirror fehlt · kein Cross-Scale-Fallback erlaubt · Old Studio/Sync prüfen",
     }
 
 
@@ -144,7 +174,6 @@ def desk_query_bars(market="NQ", tf="1H", limit=500, source=None):
         last_ms = _robust_to_ms(last.get("close_t")) or _robust_to_ms(last.get("t"))
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         age = max(0.0, (now_ms - last_ms) / 1000.0) if last_ms else None
-        # The source mirror itself is also part of the freshness decision.
         source_stale = bool(base.get("stale"))
         bar_stale = age is None or age > original._STALE_AFTER["30m"]
         base["age_seconds"] = age
@@ -160,7 +189,7 @@ def desk_query_bars(market="NQ", tf="1H", limit=500, source=None):
 
 original.original_query_bars = desk_query_bars
 core.query_bars = desk_query_bars
-core.APP_VERSION = "0.9.10-beta-canonical-feed"
+core.APP_VERSION = "0.9.11-beta-canonical-strict"
 
 
 def _feed_one(market, tf="5m"):
@@ -184,6 +213,7 @@ def _feed_one(market, tf="5m"):
         "note": x.get("note"),
         "path": x.get("db"),
         "canonical": bool(x.get("canonical")),
+        "identity_ok": x.get("identity_ok"),
     }
 
 
@@ -204,8 +234,8 @@ def diagnostics_with_30m():
             d.setdefault("feeds", {}).setdefault(market, {})[tf] = _feed_one(market, tf)
     d["version"] = core.APP_VERSION
     d["hint"] = (
-        "Canonical feed mode: NQ=TWELVE:QQQ, ES=TWELVE:SPY, XAU=TWELVE:XAU/USD. "
-        "TMBT Next performs no direct Twelve/Yahoo polling; the Old Studio owns the collector."
+        "Strict canonical feed mode: NQ=TWELVE:QQQ, ES=TWELVE:SPY, XAU=TWELVE:XAU/USD. "
+        "No local futures/Yahoo fallback is allowed because model/chart price scales must match."
     )
     return d
 
@@ -224,8 +254,9 @@ if __name__ == "__main__":
     core.PID_FILE.write_text(str(core.os.getpid()), encoding="utf-8")
     print("TMBT Next", core.APP_VERSION)
     print("Workspace:", core.WORKSPACE)
-    print("Feed: canonical Old-Studio Twelve mirror (single collector owner)")
+    print("Feed: strict canonical Old-Studio Twelve mirror (single collector owner)")
     print("NQ=QQQ · ES=SPY · XAU=XAU/USD · 30m derived from 15m")
+    print("Cross-scale local fallback: DISABLED")
     print("Open: http://127.0.0.1:%s" % core.PORT)
     try:
         core.ThreadingHTTPServer(("127.0.0.1", core.PORT), Handler).serve_forever()
