@@ -16,7 +16,7 @@
   </div>
   <div class="spacer"></div>
   <button id="alertsBtn" class="ghost">🔔 Alerts</button>
-  <a class="button ghost" href="http://127.0.0.1:8502" target="_blank">Old Studio ↗</a>
+  <a class="button ghost old-studio" href="http://127.0.0.1:8502" target="_blank">Old Studio ↗</a>
   <div class="health"><span><i id="liveDot"></i>Live</span><span><i id="paperDot"></i>Paper</span><span><i id="researchDot"></i>Research</span></div>
 </header>
 
@@ -35,7 +35,7 @@
 
   <section class="chart-section">
     <div class="chart-toolbar">
-      <div><b id="chartTitle">NQ · 1H</b><small id="chartSource">lokaler Cache</small></div>
+      <div class="chart-heading"><span class="chart-kicker">LIVE DESK</span><div><b id="chartTitle">NQ · 1H</b><small id="chartSource">lokaler Cache</small></div></div>
       <div class="toolbar-buttons">
         <button id="liveModeBtn" class="active">● LIVE</button>
         <button id="pdBtn" class="active">PD Arrays</button>
@@ -68,7 +68,7 @@
       <div><small>Target</small><b id="iTarget">—</b></div><div><small>RR</small><b id="iRR">—</b></div>
     </div>
     <div class="section-label">Kriterien</div><div id="criteria" class="criteria"><p>—</p></div>
-    <div class="section-label">Logik</div><div id="logic" class="logic"><p>—</p></div>
+    <details class="logic-details"><summary>Model Logic</summary><div id="logic" class="logic"><p>—</p></div></details>
   </aside>
 </main>
 
