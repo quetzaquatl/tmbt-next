@@ -1,0 +1,22 @@
+/* TMBT Next v0.9.15 — compact overview + notification drawer */
+:root{--left:190px;--right:330px;--bottom:240px}
+.left.panel .panel-title{height:34px}.left.panel .quotes{padding:5px}.left.panel .quotes>div{padding:6px 7px}
+.right.panel .panel-title{height:34px}.inspector{padding:9px 10px 8px}.metrics{margin:7px 8px}.metrics>div{padding:7px 8px;min-height:47px}
+.criteria,.logic{padding-left:8px;padding-right:8px}.section-label{padding-top:7px}
+.bottom-tabs button[data-tab="archive"],.bottom-tabs button[data-tab="outcomes"],.bottom-tabs button[data-tab="research"],.bottom-tabs button[data-tab="paper"],.bottom-tabs button[data-tab="system"],.bottom-tabs button[data-tab="logs"]{opacity:.68}
+.bottom-tabs button:hover{opacity:1!important}
+.active-table th:nth-child(9),.active-table td:nth-child(9){max-width:280px;overflow:hidden;text-overflow:ellipsis}
+#alertsBtn{position:relative;padding-right:28px}
+#alertsBtn .notif-badge{position:absolute;right:7px;top:50%;transform:translateY(-50%);min-width:15px;height:15px;padding:0 4px;border-radius:9px;display:grid;place-items:center;background:#d64f60;color:white;font-size:8px;font-weight:800;line-height:1}
+#alertsBtn .notif-badge.zero{display:none}
+.notification-shade{position:fixed;inset:0;background:rgba(3,8,13,.52);z-index:89;opacity:0;pointer-events:none;transition:opacity .16s ease}
+.notification-shade.open{opacity:1;pointer-events:auto}
+.notification-drawer{position:fixed;top:0;right:0;bottom:0;width:min(430px,92vw);z-index:90;background:#0d151f;border-left:1px solid #2b3c51;box-shadow:-18px 0 40px rgba(0,0,0,.35);transform:translateX(102%);transition:transform .18s ease;display:flex;flex-direction:column}
+.notification-drawer.open{transform:none}
+.notif-head{height:54px;flex:0 0 54px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid #243247;background:#0e1722}
+.notif-head>div:first-child{min-width:0;flex:1}.notif-head b{font-size:12px}.notif-head small{display:block;color:#7f91a8;font-size:9px;margin-top:1px}.notif-head button{padding:5px 7px;font-size:9px}
+.notif-toolbar{display:flex;align-items:center;gap:5px;padding:7px 10px;border-bottom:1px solid #1f2c3d;background:#0b131c}.notif-toolbar button{padding:4px 7px;font-size:9px}.notif-toolbar .spacer{flex:1}.notif-permission{color:#8da0b6;font-size:9px}
+.notif-list{flex:1;overflow:auto;padding:7px}.notif-empty{padding:28px 12px;text-align:center;color:#74869d}.notif-item{display:grid;grid-template-columns:54px 1fr;gap:7px;padding:8px 9px;margin-bottom:5px;border:1px solid #1f3043;border-radius:7px;background:#101a27}.notif-item.unread{border-color:#31506c;background:#122031}.notif-item time{color:#70849c;font-size:9px;font-variant-numeric:tabular-nums}.notif-body{min-width:0}.notif-body p{margin:2px 0 0;color:#c8d5e5;font-size:10px;line-height:1.35;word-break:break-word}.notif-kind{display:inline-block;font-size:8px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.notif-kind.signal{color:#62dfa9}.notif-kind.model{color:#79bfff}.notif-kind.research{color:#caa1ff}.notif-kind.system{color:#efb65e}.notif-kind.error{color:#ff7d8b}.notif-kind.info{color:#8fa4bb}
+.notif-foot{padding:7px 10px;border-top:1px solid #1f2c3d;color:#70849c;font-size:9px;background:#0b131c}
+@media(max-width:1250px){:root{--left:176px;--right:305px;--bottom:220px}}
+@media(max-height:760px){:root{--bottom:205px}}
