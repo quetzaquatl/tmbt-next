@@ -1,124 +1,147 @@
 from __future__ import annotations
 
+import json
 import os
-import re
 import runpy
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 
-def _workspace() -> Path:
-    return Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE"))
+def workspace() -> Path:
+    return Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 
 
-def _valid(value: str | None) -> str | None:
-    if not value:
-        return None
-    v = value.strip().strip("\"'")
-    if not (8 <= len(v) <= 160):
-        return None
-    if any(x in v.lower() for x in ("your_key", "api_key_here", "changeme", "example", "placeholder")):
-        return None
-    return v
+def collector_dir() -> Path:
+    return Path(os.environ.get("TMBT_TWELVE_DIR", r"D:\Projekt model\Trading_Model_Backtest_Studio_v3_7_DEV")).resolve()
 
 
-def _from_env() -> tuple[str | None, str | None]:
-    for name in ("TWELVE_DATA_API_KEY", "TWELVEDATA_API_KEY", "TWELVE_API_KEY", "TWELVEDATA_KEY"):
-        v = _valid(os.environ.get(name))
-        if v:
-            return v, f"environment:{name}"
-    return None, None
+def read_json(path: Path) -> dict:
+    try:
+        x = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        return x if isinstance(x, dict) else {}
+    except Exception:
+        return {}
 
 
-def _candidate_files(root: Path):
-    if not root.exists():
-        return
-    allowed = {".env", ".toml", ".json", ".yaml", ".yml", ".ini", ".cfg", ".py", ".bat", ".ps1", ".txt"}
-    words = ("twelve", "secret", "config", "setting", "credential", "live", "data", "feed", "env", "collector")
-    skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next", ".vite"}
-    root = root.resolve()
-    emitted = 0
-    for dirpath, dirnames, filenames in os.walk(root):
-        base = Path(dirpath)
+def pid_alive(pid) -> bool:
+    try:
+        pid = int(pid)
+    except Exception:
+        return False
+    if pid <= 0:
+        return False
+    if os.name == "nt":
         try:
-            depth = len(base.relative_to(root).parts)
+            r = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+            )
+            return str(pid) in (r.stdout or "") and "No tasks" not in (r.stdout or "")
         except Exception:
-            depth = 0
-        dirnames[:] = [d for d in dirnames if d.lower() not in skip_dirs and depth < 6]
-        if depth > 6:
-            continue
-        parent_text = str(base).lower()
-        for filename in filenames:
-            if emitted >= 350:
-                return
-            p = base / filename
-            name = filename.lower()
-            suffix = p.suffix.lower()
-            is_env = name.startswith(".env")
-            if not is_env and suffix not in allowed:
-                continue
-            if not is_env and not any(w in name for w in words):
-                if suffix not in {".py", ".bat", ".ps1"} or not any(w in parent_text for w in ("live", "data", "feed", "twelve", "collector")):
-                    continue
-            try:
-                if p.stat().st_size > 700_000:
-                    continue
-            except Exception:
-                continue
-            emitted += 1
-            yield p
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        return False
 
 
-def _extract(text: str, twelve_context: bool) -> str | None:
-    explicit = [
-        r"(?im)^\s*(?:TWELVE_DATA_API_KEY|TWELVEDATA_API_KEY|TWELVE_API_KEY|TWELVEDATA_KEY)\s*[:=]\s*[\"']?([^\"'\s#;]+)",
-        r"(?im)[\"']?(?:twelve_data_api_key|twelvedata_api_key|twelve_api_key)[\"']?\s*[:=]\s*[\"']([^\"']+)",
+def collector_status_path() -> Path:
+    return workspace() / "live_data" / "twelve_status.json"
+
+
+def current_collector() -> dict:
+    st = read_json(collector_status_path())
+    st["pid_alive"] = pid_alive(st.get("pid"))
+    return st
+
+
+def choose_python(app_dir: Path) -> Path:
+    candidates = [
+        app_dir / "venv" / "Scripts" / "python.exe",
+        app_dir / ".venv" / "Scripts" / "python.exe",
     ]
-    for pat in explicit:
-        m = re.search(pat, text)
-        if m:
-            v = _valid(m.group(1))
-            if v:
-                return v
-    if twelve_context:
-        for pat in (
-            r"(?im)^\s*(?:API_KEY|APIKEY)\s*[:=]\s*[\"']([^\"']+)[\"']",
-            r"(?im)[\"']apikey[\"']\s*:\s*[\"']([^\"']+)[\"']",
-        ):
-            m = re.search(pat, text)
-            if m:
-                v = _valid(m.group(1))
-                if v:
-                    return v
-    return None
+    for p in candidates:
+        if p.exists():
+            return p
+    return Path(sys.executable)
 
 
-def discover_existing_twelve_key() -> tuple[str | None, str | None]:
-    v, src = _from_env()
-    if v:
-        return v, src
-    ws = _workspace()
-    checked = set()
-    for root in (ws, ws.parent):
-        for p in _candidate_files(root):
-            if p in checked:
-                continue
-            checked.add(p)
-            try:
-                text = p.read_text(encoding="utf-8", errors="ignore")[:700_000]
-            except Exception:
-                continue
-            context = "twelve" in p.name.lower() or "twelve" in str(p.parent).lower() or "twelve" in text[:20_000].lower()
-            value = _extract(text, context)
-            if value:
-                return value, str(p)
-    return None, None
+def start_original_twelve_collector() -> None:
+    ws = workspace()
+    app_dir = collector_dir()
+    script = app_dir / "twelve_live.py"
+    status_path = collector_status_path()
+
+    print("Original Twelve collector:")
+    print("  app:", app_dir)
+    print("  status:", status_path)
+
+    if not script.exists():
+        print("  ERROR: twelve_live.py not found. Set TMBT_TWELVE_DIR if the old studio moved.")
+        return
+
+    st = current_collector()
+    if st.get("pid_alive") and st.get("running") is not False:
+        print("  already running · PID", st.get("pid"), "· state", st.get("state") or "unknown")
+        return
+
+    py = choose_python(app_dir)
+    env = os.environ.copy()
+    env["TMBT_WORKSPACE"] = str(ws)
+    log_dir = ws / "live_data"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    boot_log = log_dir / "twelve_boot.log"
+
+    kwargs = {
+        "cwd": str(app_dir),
+        "env": env,
+        "stdin": subprocess.DEVNULL,
+        "stdout": open(boot_log, "a", encoding="utf-8", buffering=1),
+        "stderr": subprocess.STDOUT,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    else:
+        kwargs["start_new_session"] = True
+
+    try:
+        proc = subprocess.Popen([str(py), str(script), "--run"], **kwargs)
+    except Exception as exc:
+        print("  ERROR starting collector:", exc)
+        return
+
+    print("  started · PID", proc.pid, "· python", py)
+    print("  log:", boot_log)
+
+    # Wait briefly for twelve_live.py to publish its own status. This gives a
+    # useful startup diagnosis without blocking the desk for long.
+    deadline = time.time() + 12
+    last = {}
+    while time.time() < deadline:
+        time.sleep(0.75)
+        last = current_collector()
+        state = str(last.get("state") or "").lower()
+        if last.get("connected") or state in {"polling", "backfill", "error", "quota_pause", "rate_limit_pause"}:
+            break
+
+    if last:
+        print(
+            "  state:", last.get("state") or "unknown",
+            "· connected:", bool(last.get("connected")),
+            "· PID:", last.get("pid") or proc.pid,
+        )
+        if last.get("last_error"):
+            print("  last_error:", str(last.get("last_error"))[:500])
+    else:
+        print("  waiting for collector status update ...")
 
 
-key, source = discover_existing_twelve_key()
-if key:
-    os.environ.setdefault("TWELVE_DATA_API_KEY", key)
-    print("Twelve credentials: FOUND (source:", source, ")")
-else:
-    print("Twelve credentials: NOT FOUND in existing workspace/config files")
+start_original_twelve_collector()
 
+# Start the new UI server after the original data writer has been ensured.
 runpy.run_module("server_desk", run_name="__main__")
