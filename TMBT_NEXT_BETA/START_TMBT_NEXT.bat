@@ -17,6 +17,6 @@ echo 30m: derived from original 15m bars.
 echo Yahoo/GC proxy fallback: OFF.
 echo.
 start "" "http://127.0.0.1:%TMBT_NEXT_PORT%"
-py -3 server_desk.py
-if errorlevel 1 python server_desk.py
+py -3 server_boot.py
+if errorlevel 1 python server_boot.py
 pause
