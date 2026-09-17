@@ -42,6 +42,17 @@ def _to_ms(v):
         return None
 
 
+def _age_text(age):
+    if age is None:
+        return "?"
+    age = max(0.0, float(age))
+    if age < 120:
+        return f"{int(age)}s"
+    if age < 7200:
+        return f"{int(age // 60)}m"
+    return f"{age / 3600:.1f}h"
+
+
 def _twelve_roots():
     roots = [
         core.WORKSPACE / "github_research_repo" / "live" / "twelve",
@@ -116,14 +127,13 @@ def _load_twelve_file(market="NQ", tf="1H", limit=500):
 
     now = datetime.now(timezone.utc)
     age = (now - latest_received).total_seconds() if latest_received else None
-    # The original writer updates all active series frequently, even on 1H/4H.
-    # 3 minutes is intentionally generous enough to tolerate sync/commit lag.
+    # The original writer refreshes the active JSON series frequently even for
+    # higher chart timeframes, so writer/receive time is the correct heartbeat.
     stale = age is None or age > 180
     ticker = payload.get("ticker") or ""
     tickerid = payload.get("tickerid") or ""
     exchange = payload.get("exchange") or ""
     freshness = "STALE" if stale else "LIVE"
-    age_txt = "?" if age is None else (f"{int(age)}s" if age < 120 else f"{int(age // 60)}m")
 
     return {
         "bars": bars,
@@ -141,7 +151,7 @@ def _load_twelve_file(market="NQ", tf="1H", limit=500):
         "last_bar_utc": datetime.fromtimestamp(latest_bar_ms / 1000.0, tz=timezone.utc).isoformat() if latest_bar_ms else None,
         "age_seconds": age,
         "stale": stale,
-        "note": f"twelve · {tickerid or ticker or mkt} · {freshness} · age {age_txt}",
+        "note": f"twelve · {tickerid or ticker or mkt} · {freshness} · age {_age_text(age)}",
     }
 
 
@@ -155,6 +165,26 @@ def _latest_ms(result):
         return -1
 
 
+def _decorate_local(local):
+    local = dict(local or {})
+    src = local.get("source") or "local"
+    age = None
+    db = local.get("db")
+    try:
+        if db:
+            age = max(0.0, datetime.now(timezone.utc).timestamp() - Path(db).stat().st_mtime)
+    except Exception:
+        age = None
+    stale = age is None or age > 180
+    local["feed"] = "original_sqlite"
+    local["provider"] = src
+    local["source"] = None
+    local["age_seconds"] = age
+    local["stale"] = stale
+    local["note"] = f"{src} · original local feed · {'STALE' if stale else 'LIVE'} · age {_age_text(age)}"
+    return local
+
+
 def original_query_bars(market="NQ", tf="1H", limit=500, source=None):
     # First choice: exactly the Twelve live-series mirror used by Studio 4.6.
     original = _load_twelve_file(market, tf, limit)
@@ -166,20 +196,14 @@ def original_query_bars(market="NQ", tf="1H", limit=500, source=None):
     local = dict(local or {})
 
     if original and original.get("bars"):
-        # Prefer the original Twelve mirror. If SQLite is materially newer,
-        # use it instead because it is likely the same writer before sync lag.
+        # Prefer the original Twelve mirror. If SQLite contains a later bar,
+        # use it because it is likely the same original writer before sync lag.
         if local.get("bars") and _latest_ms(local) > _latest_ms(original):
-            src = local.get("source") or "local"
-            local["feed"] = "original_sqlite"
-            local["note"] = f"{src} · original local feed"
-            return local
+            return _decorate_local(local)
         return original
 
     if local.get("bars"):
-        src = local.get("source") or "local"
-        local["feed"] = "original_sqlite"
-        local["note"] = f"{src} · original local feed"
-        return local
+        return _decorate_local(local)
 
     return {
         "bars": [],
