@@ -32,30 +32,40 @@ def _from_env() -> tuple[str | None, str | None]:
 def _candidate_files(root: Path):
     if not root.exists():
         return
-    interesting_ext = {".env", ".toml", ".json", ".yaml", ".yml", ".ini", ".cfg", ".py", ".bat", ".ps1", ".txt"}
-    interesting_words = ("twelve", "secret", "config", "setting", "credential", "live", "data", "feed", "env")
-    seen = set()
-    count = 0
-    for p in root.rglob("*"):
-        if count >= 350:
-            break
+    allowed = {".env", ".toml", ".json", ".yaml", ".yml", ".ini", ".cfg", ".py", ".bat", ".ps1", ".txt"}
+    words = ("twelve", "secret", "config", "setting", "credential", "live", "data", "feed", "env", "collector")
+    skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next", ".vite"}
+    root = root.resolve()
+    emitted = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        base = Path(dirpath)
         try:
-            if not p.is_file() or p in seen or p.stat().st_size > 700_000:
-                continue
+            depth = len(base.relative_to(root).parts)
         except Exception:
+            depth = 0
+        dirnames[:] = [d for d in dirnames if d.lower() not in skip_dirs and depth < 6]
+        if depth > 6:
             continue
-        name = p.name.lower()
-        suffix = p.suffix.lower()
-        is_env = name.startswith(".env")
-        if not is_env and suffix not in interesting_ext:
-            continue
-        if not is_env and not any(w in name for w in interesting_words):
-            parent = str(p.parent).lower()
-            if suffix not in {".py", ".bat", ".ps1"} or not any(w in parent for w in ("live", "data", "feed", "twelve", "collector")):
+        parent_text = str(base).lower()
+        for filename in filenames:
+            if emitted >= 350:
+                return
+            p = base / filename
+            name = filename.lower()
+            suffix = p.suffix.lower()
+            is_env = name.startswith(".env")
+            if not is_env and suffix not in allowed:
                 continue
-        seen.add(p)
-        count += 1
-        yield p
+            if not is_env and not any(w in name for w in words):
+                if suffix not in {".py", ".bat", ".ps1"} or not any(w in parent_text for w in ("live", "data", "feed", "twelve", "collector")):
+                    continue
+            try:
+                if p.stat().st_size > 700_000:
+                    continue
+            except Exception:
+                continue
+            emitted += 1
+            yield p
 
 
 def _extract(text: str, twelve_context: bool) -> str | None:
