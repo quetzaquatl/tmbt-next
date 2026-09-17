@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TMBT Next</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="compat.css"><link rel="stylesheet" href="layout_fix.css">
+<title>TMBT Next</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="compat.css"><link rel="stylesheet" href="layout_fix.css"><link rel="stylesheet" href="active_desk.css">
 </head>
 <body>
 <div id="app">
@@ -22,13 +22,13 @@
 
 <main class="workspace">
   <aside class="left panel" id="leftPanel">
-    <div class="panel-title"><b>Markets & Modelle</b><button id="leftHide">‹</button></div>
+    <div class="panel-title"><b>Markets</b><button id="leftHide">‹</button></div>
     <div class="quotes">
       <div data-goto="NQ"><b>NQ</b><strong id="qNQ">—</strong><small>Auto Feed <span class="feed-mini" id="feedNQ">—</span></small></div>
       <div data-goto="ES"><b>ES</b><strong id="qES">—</strong><small>Auto Feed <span class="feed-mini" id="feedES">—</span></small></div>
       <div data-goto="XAU"><b>XAU</b><strong id="qXAU">—</strong><small>Auto Feed <span class="feed-mini" id="feedXAU">—</span></small></div>
     </div>
-    <div class="section-label">Live models</div>
+    <div class="section-label legacy-model-list-label">Model monitor</div>
     <div id="modelList"></div>
   </aside>
   <div class="splitter-v" id="splitLeft"></div>
@@ -61,7 +61,7 @@
   <aside class="right panel" id="rightPanel">
     <div class="panel-title"><b>Setup Inspector</b><button id="rightHide">›</button></div>
     <div id="inspector" class="inspector empty-inspector">
-      <span class="pill idle">NO SETUP</span><h3>Kein Modell ausgewählt</h3><p>Links ein Modell anklicken.</p>
+      <span class="pill idle">NO SETUP</span><h3>Kein Modell ausgewählt</h3><p>Im Active-Tab ein Modell anklicken.</p>
     </div>
     <div class="metrics">
       <div><small>Entry</small><b id="iEntry">—</b></div><div><small>Stop</small><b id="iStop">—</b></div>
@@ -75,8 +75,8 @@
 <div class="splitter-h" id="splitBottom"></div>
 <section class="bottom-panel">
   <div class="bottom-tabs">
-    <button data-tab="signals" class="active">Signals</button>
-    <button data-tab="radar">Radar</button>
+    <button data-tab="signals" class="active">Active</button>
+    <button data-tab="radar">Monitor</button>
     <button data-tab="archive">Archive</button>
     <button data-tab="outcomes">Outcomes</button>
     <button data-tab="research">Research</button>
@@ -87,7 +87,7 @@
   </div>
   <div class="bottom-content">
     <div class="tab active" id="tab-signals"><div id="signalsTable"></div></div>
-    <div class="tab" id="tab-radar"><div id="radarView" class="radar-view"><div class="empty">Model Radar wird geladen…</div></div></div>
+    <div class="tab" id="tab-radar"><div id="radarView" class="radar-view"><div class="empty">Background Monitor wird geladen…</div></div></div>
     <div class="tab" id="tab-archive">
       <div class="filters"><input id="archiveSearch" placeholder="Model / Market / Status suchen…"><select id="archiveStage"><option value="">Alle Status</option><option>SIGNAL</option><option>CLOSED</option><option>EXPIRED</option><option>ARMED</option><option>WATCH</option></select><span id="archiveCount"></span></div>
       <div id="archiveTable"></div>
@@ -106,4 +106,5 @@
 <script src="layout_fix.js"></script>
 <script src="chart_pan_patch.js"></script>
 <script src="feed_gate_patch.js"></script>
+<script src="active_desk.js"></script>
 </body></html>
