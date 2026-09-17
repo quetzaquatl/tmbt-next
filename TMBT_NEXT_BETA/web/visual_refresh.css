@@ -1,0 +1,115 @@
+/* TMBT Next v0.9.17 — visual hierarchy refresh */
+:root{
+  --bg:#080b10;
+  --panel:#0d1118;
+  --panel2:#111720;
+  --panel3:#151d28;
+  --line:#202a37;
+  --line-soft:#171f2a;
+  --text:#edf2f8;
+  --muted:#7f8b9d;
+  --blue:#4aa3ff;
+  --green:#35d59a;
+  --red:#ff6678;
+  --amber:#f3b64f;
+  --violet:#a985ff;
+}
+
+html,body,#app{background:var(--bg)!important;color:var(--text)}
+.topbar{background:#0a0e14!important;border-bottom-color:#1c2531!important;box-shadow:0 8px 30px rgba(0,0,0,.20)}
+.logo{background:linear-gradient(135deg,#2479c8,#63bdff)!important;box-shadow:0 0 24px rgba(74,163,255,.16)}
+.panel,.bottom-panel{background:var(--panel)!important}
+.chart-section{background:#090d13!important}
+.chart-toolbar{background:#0a0f16!important;border-bottom-color:#1d2733!important}
+.chart-host{background:linear-gradient(180deg,#0b1017,#070a0f)!important}
+
+/* Top navigation: market selector is a primary control, timeframe secondary. */
+.marketbar{padding:3px;background:#0e141d;border:1px solid #202b39;border-radius:10px;gap:2px!important}
+.marketbar button{border:0!important;background:transparent!important;color:#8998aa!important;border-radius:7px!important;padding:6px 11px!important}
+.marketbar button.active{background:#173958!important;color:#b9dcff!important;box-shadow:inset 0 0 0 1px #2b6594}
+.tfbar{padding-left:4px;border-left:1px solid #202a36}
+.tfbar button{border-color:transparent!important;background:transparent!important;color:#748398!important}
+.tfbar button.active{background:#182230!important;border-color:#2c3c50!important;color:#d9e5f2!important}
+#alertsBtn{position:relative;border-color:#2c3b4d!important;background:#101722!important}
+
+/* Markets rail: less chrome, stronger states. */
+.left.panel{background:#0a0f15!important;border-right-color:#1b2531!important}
+.panel-title{background:#0b1017f2!important;border-bottom-color:#19222d!important;color:#aab7c7}
+.quotes{display:grid;gap:5px;padding:8px!important}
+.quotes>div{background:#0f151e;border:1px solid #182331!important;border-radius:9px!important;padding:9px 10px!important}
+.quotes>div:hover{background:#131d29!important;border-color:#2b435d!important}
+.quotes>div b{font-size:11px;letter-spacing:.05em}.quotes>div strong{font-size:13px;color:#e7eef7}.quotes>div small{color:#68798e!important}
+
+/* Chart becomes the visual center. */
+.chart-kicker{color:#7dc4ff!important;background:#0f2639!important;border-color:#235276!important}
+#chartTitle{font-size:12px!important;color:#f0f5fa}.chart-toolbar small{color:#708096!important}
+.feed-badge{font-weight:800;letter-spacing:.06em}
+.toolbar-buttons button{background:#0e151e!important;border-color:#202c3a!important;color:#8292a6!important}
+.toolbar-buttons button.active{background:#123553!important;border-color:#2b6a9a!important;color:#9fd3ff!important}
+.pd-strip{background:#0a1017!important;border-top-color:#1c2531!important}.pd-strip>div{border-right-color:#18222d!important}.pd-strip small{color:#66768b!important}.pd-strip b{color:#d5dfeb!important}
+
+/* Inspector: selected setup gets much more hierarchy. */
+.right.panel{background:#0b1017!important;border-left-color:#1b2531!important}
+.inspector{background:linear-gradient(180deg,#111923,#0c121a)!important;border-bottom-color:#1e2936!important;padding:14px!important}
+.inspector h3{font-size:17px!important;margin-top:9px!important;color:#f2f6fa}.inspector p{color:#8997a9!important;line-height:1.45}
+.metrics{background:#1e2936!important;border-color:#253344!important;gap:1px!important;margin:10px!important}
+.metrics>div{background:#101721!important;min-height:62px!important}.metrics small{color:#697a8f!important}.metrics b{font-size:16px!important;color:#eef4fb}
+#iEntry{color:#91caff!important}#iStop{color:#ff8290!important}#iTarget{color:#5ee0aa!important}#iRR{color:#f1c46d!important}
+.section-label{color:#65778d!important}
+.criteria p,.logic p{border-bottom-color:#18222e!important}
+.logic-details{background:#0a1017!important;border-color:#1b2633!important}
+
+/* Semantic colors: color means state, not decoration. */
+.pill{font-weight:800!important;letter-spacing:.045em!important;border:1px solid transparent!important}
+.pill.signal,.pill.triggered{background:#123f31!important;color:#69e0ae!important;border-color:#245e49!important}
+.pill.armed,.pill.ready{background:#443115!important;color:#ffd17b!important;border-color:#684c22!important}
+.pill.watch,.pill.forming,.pill.strong{background:#132f49!important;color:#8bc8ff!important;border-color:#28567e!important}
+.pill.blocked{background:#401b23!important;color:#ff8994!important;border-color:#682e39!important}
+.pill.idle,.pill.wait_session,.pill.expired,.pill.closed{background:#1a222d!important;color:#8795a8!important;border-color:#273343!important}
+.side-long{color:#5fe0aa!important}.side-short{color:#ff7d8b!important}.side-neutral{color:#95a3b5!important}
+
+/* Active desk is no longer a dense spreadsheet. */
+.active-desk-head{background:#0d141d!important;border:1px solid #1d2937!important;border-radius:10px 10px 0 0!important;padding:10px 12px!important}
+.active-desk-head b{font-size:13px!important;color:#f0f5fa}.active-desk-head small{color:#6f8197!important}
+.active-counts{gap:10px!important}.active-counts span{padding:2px 6px;border-radius:10px;background:#151e29}.active-counts .hot{background:#102b22;color:#5cdda7!important}.active-counts .blocked{background:#30161c;color:#ff8190!important}
+.active-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:8px;padding:9px;background:#090e14;border:1px solid #1d2937;border-top:0;border-radius:0 0 10px 10px}
+.active-setup-card{position:relative;min-width:0;background:#111822;border:1px solid #202d3c;border-radius:10px;padding:11px 12px 10px;cursor:pointer;overflow:hidden;transition:transform .12s ease,border-color .12s ease,background .12s ease,box-shadow .12s ease}
+.active-setup-card:hover{transform:translateY(-1px);background:#141e2a;border-color:#344a62;box-shadow:0 8px 22px rgba(0,0,0,.18)}
+.active-setup-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#526171}
+.active-setup-card.signal:before,.active-setup-card.triggered:before{background:var(--green)}
+.active-setup-card.armed:before,.active-setup-card.ready:before{background:var(--amber)}
+.active-setup-card.watch:before,.active-setup-card.forming:before,.active-setup-card.strong:before{background:var(--blue)}
+.active-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;margin-bottom:8px}
+.active-card-title{min-width:0}.active-card-title b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.active-card-title small{display:block;color:#74869d;font-size:9px;margin-top:2px}
+.active-card-side{font-size:13px;font-weight:900;letter-spacing:.04em;white-space:nowrap}
+.active-card-middle{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:7px 0}
+.active-card-metric{background:#0c121a;border:1px solid #1b2633;border-radius:7px;padding:6px 7px;min-width:0}.active-card-metric small{display:block;color:#66778d;font-size:8px;text-transform:uppercase;letter-spacing:.06em}.active-card-metric b{display:block;margin-top:2px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.active-card-bottom{display:flex;align-items:center;gap:7px;margin-top:8px;padding-top:7px;border-top:1px solid #1a2531;font-size:9px;color:#74869b}.active-card-bottom .next{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.active-card-bottom .formation{font-weight:800;color:#c1cede}
+.active-card-time{color:#92a3b7!important;font-variant-numeric:tabular-nums}
+.active-empty{background:#090e14!important;border:1px solid #1d2937!important;border-top:0!important;border-radius:0 0 10px 10px!important}
+
+/* Monitor stays deliberately quiet. */
+.background-head{background:#0d131b!important;border-bottom-color:#1b2531!important}.monitor-table{opacity:.92}.monitor-table tbody tr{background:transparent}.monitor-table tbody tr:hover{background:#111923!important}
+.monitor-state.blocked{color:#ff7f8d!important}.monitor-state.wait{color:#8796aa!important}
+
+/* Bottom navigation: operational first, secondary tools behind More. */
+.bottom-panel{border-top-color:#1d2733!important}.bottom-tabs{background:#0a0f15!important;border-bottom-color:#1c2632!important;padding:4px 8px!important;gap:3px!important}
+.bottom-tabs button[data-tab="signals"],.bottom-tabs button[data-tab="radar"],.bottom-tabs button[data-tab="archive"],.bottom-tabs button[data-tab="research"]{display:inline-flex!important}
+.bottom-tabs button[data-tab="outcomes"],.bottom-tabs button[data-tab="paper"],.bottom-tabs button[data-tab="system"],.bottom-tabs button[data-tab="logs"]{display:none!important}
+.bottom-tabs button{color:#7f8da0!important;border-radius:6px!important}.bottom-tabs button.active{background:#162333!important;color:#dce9f6!important}
+.bottom-tabs button[data-tab="signals"].active{background:#123326!important;color:#68dfaa!important}
+.bottom-tabs button[data-tab="research"].active{background:#251d3d!important;color:#bea8ff!important}
+.bottom-content{background:#090e14!important}
+.more-tabs-wrap{position:relative;display:flex;align-items:center}.more-tabs-btn{border:1px solid #263446!important;background:#101721!important;color:#98a6b8!important;padding:5px 9px!important}.more-tabs-menu{display:none;position:absolute;right:0;bottom:34px;min-width:170px;padding:5px;background:#111822;border:1px solid #2a394b;border-radius:9px;box-shadow:0 14px 34px rgba(0,0,0,.38);z-index:40}.more-tabs-wrap.open .more-tabs-menu{display:grid;gap:3px}.more-tabs-menu button{display:flex!important;width:100%;justify-content:flex-start!important;padding:7px 9px!important;text-align:left;background:transparent!important}.more-tabs-menu button:hover{background:#1a2634!important}.more-tabs-menu button[data-target="system"],.more-tabs-menu button[data-target="logs"]{color:#93a2b5!important}.more-tabs-menu button[data-target="paper"]{color:#8fc8ff!important}.more-tabs-menu button[data-target="outcomes"]{color:#c7b0ff!important}
+
+/* Research gets its own semantic accent. */
+.research-card{border-color:#2b2541!important;background:#12101a!important}.research-card h4{color:#c6b4ff!important}.progress{background:#242033!important}.progress i{background:linear-gradient(90deg,#7454d8,#b18cff)!important}
+.good{color:#58dba4!important}.bad{color:#ff7484!important}
+
+@media(max-width:1180px){
+  .active-card-grid{grid-template-columns:repeat(auto-fit,minmax(225px,1fr))}
+  .active-card-middle{grid-template-columns:1fr 1fr}.active-card-metric:nth-child(3){display:none}
+}
+@media(max-height:720px){
+  .active-setup-card{padding:8px 10px}.active-card-middle{margin:5px 0}.active-card-bottom{margin-top:5px;padding-top:5px}
+}
