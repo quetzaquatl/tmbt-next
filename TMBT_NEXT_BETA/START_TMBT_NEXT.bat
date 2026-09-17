@@ -7,7 +7,7 @@ set "TMBT_NEXT_PORT=8510"
 
 echo.
 echo =========================================
-echo TMBT NEXT BETA 0.9.17 VISUAL DESK
+echo TMBT NEXT BETA 0.9.18 CONTEXT BIAS
 echo =========================================
 echo Workspace: %TMBT_WORKSPACE%
 echo URL: http://127.0.0.1:%TMBT_NEXT_PORT%
@@ -15,11 +15,14 @@ echo Active: setup cards with semantic status and direction colors.
 echo Monitor: background / wait / idle / expired / proxy / stale.
 echo Secondary tools: Outcomes / Paper / System / Logs moved behind More.
 echo Notifications: persistent local history for model, research and system alerts.
-echo Direction safety: simultaneous opposite iFVGs on one market are blocked.
-echo HTF bias: no EMA / no indicator heuristic; price-action rule still pending.
+echo Context hierarchy: SMT -^> PO3 -^> Asia/Midnight -^> iFVG entry.
+echo SMT/PO3 directional context can veto the opposite iFVG direction.
+echo Asia range, first sweep, PO3 phase and NY midnight open are explicit context fields.
+echo Fallback safety: simultaneous opposite iFVGs stay blocked if context is neutral.
 echo EBP matrix: NQ / ES x 15m / 30m / 1H
 echo Feed priority: true NQ/ES futures mirror -^> QQQ/SPY monitoring-only fallback.
 echo Safety: proxy or stale feeds cannot fire live alerts.
+echo Context endpoint: http://127.0.0.1:%TMBT_NEXT_PORT%/api/context
 echo Preflight endpoint: http://127.0.0.1:%TMBT_NEXT_PORT%/api/preflight
 echo.
 
