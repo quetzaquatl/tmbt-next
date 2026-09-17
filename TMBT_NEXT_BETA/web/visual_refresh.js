@@ -1,4 +1,4 @@
-// TMBT Next v0.9.17 — visual desk refresh.
+// TMBT Next v0.9.19 — visual desk refresh.
 (function(){
   const ACTIVE=/^(SIGNAL|ARMED|WATCH|FORMING|STRONG|READY|TRIGGERED)$/i;
   const DEAD=/^(IDLE|WAIT_SESSION|EXPIRED|CLOSED|BLOCKED|NO_SETUP)$/i;
@@ -13,6 +13,36 @@
   function timeText(m){const x=eventMs(m);if(!x)return "—";const d=new Date(x);const local=d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});let ny="—";try{ny=new Intl.DateTimeFormat("de-DE",{timeZone:"America/New_York",hour:"2-digit",minute:"2-digit",hour12:false}).format(d)}catch{}return `${local} · NY ${ny}`}
   function info(m){try{return typeof formationInfo==="function"?formationInfo(m):{pct:null,next:null}}catch{return {pct:null,next:null}}}
   function number(v,n=2){try{return v==null||v===""?"—":Number(v).toFixed(n)}catch{return "—"}}
+  function criterionStatus(c){const s=String(c?.status||"PENDING").toUpperCase();return s==="PASS"?"pass":s==="WARN"?"warn":/FAIL|BLOCK|INVALID/.test(s)?"fail":"pending"}
+  function shortCriterionLabel(label){
+    const z=String(label||"");
+    if(/SMT Profit Taking/i.test(z))return "SMT TP";
+    if(/SMT/i.test(z))return "SMT";
+    if(/^PO3$/i.test(z))return "PO3";
+    if(/Asia Range/i.test(z))return "Asia";
+    if(/Midnight Open/i.test(z))return "Midnight";
+    if(/Liquidity Sweep/i.test(z))return "Sweep";
+    if(/Opposite FVG/i.test(z))return "iFVG";
+    if(/CE \/ 50%-Retest/i.test(z))return "CE Retest";
+    if(/Mindest-RR/i.test(z))return "RR";
+    if(/Entry-Retest/i.test(z))return "Retest";
+    if(/BOS/i.test(z))return "BOS";
+    if(/OTE/i.test(z))return "OTE";
+    return z.length>15?z.slice(0,14)+"…":z;
+  }
+  function criteriaSummary(m){
+    const all=Array.isArray(m?.criteria)?m.criteria:[];
+    if(!all.length)return '<div class="active-card-criteria empty"><span>Keine Kriterien im Payload</span></div>';
+    const priority=/SMT Profit Taking|SMT NQ\/ES|^PO3$|Asia Range|Midnight Open|Liquidity Sweep|Opposite FVG|CE \/ 50%-Retest|Mindest-RR|Entry-Retest|BOS|OTE/i;
+    const ranked=all.map((c,i)=>({c,i,p:priority.test(String(c?.label||c?.name||""))?1:0})).sort((a,b)=>b.p-a.p||a.i-b.i);
+    const chosen=ranked.slice(0,5).map(x=>x.c);
+    const chips=chosen.map(c=>{
+      const label=c?.label||c?.name||"Kriterium",st=criterionStatus(c),detail=c?.detail||"";
+      return `<span class="criterion-chip ${st}" title="${esc(label)}${detail?` — ${esc(detail)}`:""}">${esc(shortCriterionLabel(label))}</span>`;
+    }).join("");
+    const more=all.length>chosen.length?`<span class="criterion-more">+${all.length-chosen.length}</span>`:"";
+    return `<div class="active-card-criteria">${chips}${more}</div>`;
+  }
 
   // Override the dense table with scan-friendly setup cards.
   window.renderSignals=renderSignals=function(){
@@ -40,6 +70,7 @@
           <div class="active-card-metric"><small>Stop</small><b style="color:#ff8290">${number(sl,4)}</b></div>
           <div class="active-card-metric"><small>Target</small><b style="color:#5ee0aa">${number(tp,4)}</b></div>
         </div>
+        ${criteriaSummary(m)}
         <div class="active-card-bottom"><span class="formation">${esc(pct)}</span><span class="next">${esc(next)}</span></div>
       </article>`;
     }).join("")+'</div>';
@@ -80,7 +111,19 @@
   }
 
   const extraStyle=document.createElement("style");
-  extraStyle.textContent=`.inspector-side-badge{float:right;margin-top:-21px;font-size:15px;letter-spacing:.05em}.inspector[data-side="long"]{box-shadow:inset 3px 0 0 #35d59a}.inspector[data-side="short"]{box-shadow:inset 3px 0 0 #ff6678}`;
+  extraStyle.textContent=`
+    .inspector-side-badge{float:right;margin-top:-21px;font-size:15px;letter-spacing:.05em}
+    .inspector[data-side="long"]{box-shadow:inset 3px 0 0 #35d59a}
+    .inspector[data-side="short"]{box-shadow:inset 3px 0 0 #ff6678}
+    .active-card-criteria{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0 5px;padding-top:8px;border-top:1px solid rgba(120,150,180,.12)}
+    .active-card-criteria.empty{color:#64748b;font-size:10px}
+    .criterion-chip,.criterion-more{display:inline-flex;align-items:center;min-height:19px;padding:2px 6px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:.02em;border:1px solid rgba(120,150,180,.22);background:rgba(70,90,115,.12);color:#9fb2c8}
+    .criterion-chip.pass{border-color:rgba(52,211,153,.28);background:rgba(52,211,153,.08);color:#6ee7b7}
+    .criterion-chip.warn{border-color:rgba(251,191,36,.32);background:rgba(251,191,36,.09);color:#fcd34d}
+    .criterion-chip.fail{border-color:rgba(248,113,113,.32);background:rgba(248,113,113,.09);color:#fda4af}
+    .criterion-chip.pending{border-color:rgba(96,165,250,.26);background:rgba(96,165,250,.07);color:#93c5fd}
+    .criterion-more{color:#71859c}
+  `;
   document.head.appendChild(extraStyle);
 
   const baseSelect=window.selectModel;
