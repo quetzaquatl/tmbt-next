@@ -88,9 +88,6 @@ def _apply_market_context(models, target):
             or confirmed_bias == "CONFLICT"
         )
 
-        # Entry SMT is a veto only before an entry. Once SIGNAL is already active,
-        # a newly appearing SMT must become trade management, not retroactively
-        # erase/block a trade that actually existed.
         if _is_open_trade(original):
             if m.get("status") == "BLOCKED":
                 m["status"] = original.get("status") or original.get("stage") or "SIGNAL"
@@ -119,19 +116,6 @@ def _apply_market_context(models, target):
 
 
 def context_locked_models():
-    """Apply NQ/ES price-action context before entries and during open trades.
-
-    Entry hierarchy:
-      symmetric SMT veto -> target PO3 -> Asia/Midnight context -> iFVG entry.
-
-    Open-trade hierarchy:
-      raw opposite SMT -> tighten / partial-profit advisory;
-      confirmed opposite SMT -> exit-review advisory.
-
-    NQ and ES retain separate PO3/Asia/Midnight state, while SMT itself is
-    symmetric: it does not matter which of the two correlated indices performs
-    the liquidity raid.
-    """
     models = [deepcopy(m) for m in (_base_ready_models() or [])]
     models = _apply_market_context(models, "NQ")
     models = _apply_market_context(models, "ES")
@@ -164,7 +148,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.19-beta-smt-trade-management"
+core.APP_VERSION = "0.9.20-beta-inspector-reveal"
 
 
 class Handler(ready.Handler):
@@ -186,17 +170,10 @@ if __name__ == "__main__":
     print("TMBT Next", core.APP_VERSION)
     print("Workspace:", core.WORKSPACE)
     print("Desk: visual-priority live workspace + setup cards + notification history")
+    print("Inspector: Active/Monitor click force-opens Setup Inspector and criteria")
     print("Context hierarchy: symmetric SMT -> PO3 -> Asia/Midnight -> iFVG entry")
     print("SMT entry veto: confirmed divergence can block the opposite setup before entry")
     print("SMT trade management: raw opposite divergence warns/takes partial; confirmed divergence triggers exit review")
-    print("PO3: ordered Asia manipulation/reclaim and distribution state is point-in-time only")
-    print("NQ and ES PO3/session context are evaluated separately; SMT direction is symmetric")
-    print("Fallback safety: opposite pre-entry iFVGs are both blocked when context stays neutral")
-    print("EBP matrix: NQ/ES x 15m/30m/1H · closed-bar evaluator active")
-    print("Feed priority: TRUE FUTURES mirror -> QQQ/SPY monitoring-only fallback")
-    print("Safety: proxy/stale/out-of-session models cannot enter Active Now")
-    print("Context: http://127.0.0.1:%s/api/context?market=NQ" % core.PORT)
-    print("Preflight: http://127.0.0.1:%s/api/preflight" % core.PORT)
     print("Open: http://127.0.0.1:%s" % core.PORT)
     try:
         core.ThreadingHTTPServer(("127.0.0.1", core.PORT), Handler).serve_forever()
