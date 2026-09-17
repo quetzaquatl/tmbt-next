@@ -67,10 +67,11 @@ def print_collector_status() -> None:
 
 
 print("========================================")
-print("TMBT NEXT · SINGLE FEED OWNER")
+print("TMBT NEXT · EBP MATRIX READY")
 print("========================================")
 print("Workspace:", workspace())
 print_collector_status()
-print("Starting UI against the Old-Studio Twelve mirror...")
+print("Starting 6-instance EBP matrix: NQ/ES x 15m/30m/1H")
+print("QQQ/SPY proxy feeds remain monitoring-only until true futures data is attached.")
 
-runpy.run_module("server_desk", run_name="__main__")
+runpy.run_module("server_ready", run_name="__main__")
