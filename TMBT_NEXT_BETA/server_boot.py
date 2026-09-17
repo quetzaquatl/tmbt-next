@@ -13,7 +13,7 @@ def _workspace() -> Path:
 def _valid(value: str | None) -> str | None:
     if not value:
         return None
-    v = value.strip().strip('"\'')
+    v = value.strip().strip("\"'")
     if not (8 <= len(v) <= 160):
         return None
     if any(x in v.lower() for x in ("your_key", "api_key_here", "changeme", "example", "placeholder")):
@@ -50,13 +50,11 @@ def _candidate_files(root: Path):
         if not is_env and suffix not in interesting_ext:
             continue
         if not is_env and not any(w in name for w in interesting_words):
-            # Python/batch files can still contain a collector key; only inspect
-            # them when their parent/name looks data-related to avoid scanning the
-            # entire project indiscriminately.
             parent = str(p.parent).lower()
             if suffix not in {".py", ".bat", ".ps1"} or not any(w in parent for w in ("live", "data", "feed", "twelve", "collector")):
                 continue
-        seen.add(p); count += 1
+        seen.add(p)
+        count += 1
         yield p
 
 
@@ -72,8 +70,6 @@ def _extract(text: str, twelve_context: bool) -> str | None:
             if v:
                 return v
     if twelve_context:
-        # Old collectors sometimes used a generic API_KEY variable inside a
-        # Twelve-specific file/module.
         for pat in (
             r"(?im)^\s*(?:API_KEY|APIKEY)\s*[:=]\s*[\"']([^\"']+)[\"']",
             r"(?im)[\"']apikey[\"']\s*:\s*[\"']([^\"']+)[\"']",
@@ -91,9 +87,8 @@ def discover_existing_twelve_key() -> tuple[str | None, str | None]:
     if v:
         return v, src
     ws = _workspace()
-    roots = [ws, ws.parent]
     checked = set()
-    for root in roots:
+    for root in (ws, ws.parent):
         for p in _candidate_files(root):
             if p in checked:
                 continue
@@ -116,5 +111,4 @@ if key:
 else:
     print("Twelve credentials: NOT FOUND in existing workspace/config files")
 
-# Run the actual server as __main__ after the environment bridge is prepared.
 runpy.run_module("server_desk", run_name="__main__")
