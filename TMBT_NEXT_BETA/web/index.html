@@ -17,16 +17,16 @@
   <div class="spacer"></div>
   <button id="alertsBtn" class="ghost">🔔 Alerts</button>
   <a class="button ghost old-studio" href="http://127.0.0.1:8502" target="_blank">Old Studio ↗</a>
-  <div class="health"><span><i id="liveDot"></i>Live</span><span><i id="paperDot"></i>Paper</span><span><i id="researchDot"></i>Research</span></div>
+  <div class="health"><span><i id="liveDot"></i>Feed</span><span><i id="paperDot"></i>Paper</span><span><i id="researchDot"></i>Research</span></div>
 </header>
 
 <main class="workspace">
   <aside class="left panel" id="leftPanel">
     <div class="panel-title"><b>Markets & Modelle</b><button id="leftHide">‹</button></div>
     <div class="quotes">
-      <div data-goto="NQ"><b>NQ</b><strong id="qNQ">—</strong><small>QQQ proxy · Twelve</small></div>
-      <div data-goto="ES"><b>ES</b><strong id="qES">—</strong><small>SPY proxy · Twelve</small></div>
-      <div data-goto="XAU"><b>XAU</b><strong id="qXAU">—</strong><small>XAU/USD spot · Twelve</small></div>
+      <div data-goto="NQ"><b>NQ</b><strong id="qNQ">—</strong><small>QQQ proxy · Twelve <span class="feed-mini" id="feedNQ">—</span></small></div>
+      <div data-goto="ES"><b>ES</b><strong id="qES">—</strong><small>SPY proxy · Twelve <span class="feed-mini" id="feedES">—</span></small></div>
+      <div data-goto="XAU"><b>XAU</b><strong id="qXAU">—</strong><small>XAU/USD spot · Twelve <span class="feed-mini" id="feedXAU">—</span></small></div>
     </div>
     <div class="section-label">Live models</div>
     <div id="modelList"></div>
@@ -35,7 +35,7 @@
 
   <section class="chart-section">
     <div class="chart-toolbar">
-      <div class="chart-heading"><span class="chart-kicker">LIVE DESK</span><div><b id="chartTitle">NQ · 1H</b><small id="chartSource">Original Twelve Pipeline</small></div></div>
+      <div class="chart-heading"><span class="chart-kicker">LIVE DESK</span><div><b id="chartTitle">NQ · 1H</b><small id="chartSource">Original Twelve Pipeline</small></div><span id="feedBadge" class="feed-badge">CHECK</span></div>
       <div class="toolbar-buttons">
         <button id="liveModeBtn" class="active">● LIVE</button>
         <button id="pdBtn" class="active">PD Arrays</button>
@@ -80,6 +80,7 @@
     <button data-tab="outcomes">Outcomes</button>
     <button data-tab="research">Research</button>
     <button data-tab="paper">Paper</button>
+    <button data-tab="system">System</button>
     <button data-tab="logs">Logs</button>
     <div class="spacer"></div><button id="bottomHide">⌄</button>
   </div>
@@ -92,6 +93,7 @@
     <div class="tab" id="tab-outcomes"><div id="outcomeCards"></div></div>
     <div class="tab" id="tab-research"><div id="researchList"></div></div>
     <div class="tab" id="tab-paper"><div id="paperView"></div></div>
+    <div class="tab" id="tab-system"><div id="systemView" class="system-view"><div class="empty">Systemdiagnose wird geladen…</div></div></div>
     <div class="tab" id="tab-logs"><pre id="logs">TMBT Next gestartet.</pre></div>
   </div>
 </section>
