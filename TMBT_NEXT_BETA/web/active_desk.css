@@ -1,0 +1,40 @@
+/* TMBT Next v0.9.14 — focused live workflow.
+   One operational queue (Active), one background monitor. */
+.legacy-model-list-label,#modelList{display:none!important}
+.left.panel .quotes{margin-bottom:8px}
+
+.active-desk-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 9px;border-bottom:1px solid #243346;background:#0e1825}
+.active-desk-head>div:first-child{display:flex;align-items:baseline;gap:8px;min-width:0}
+.active-desk-head b{font-size:12px;letter-spacing:.02em}
+.active-desk-head small{color:#7f91a8;font-size:10px}
+.active-counts{display:flex;gap:7px;white-space:nowrap;font-size:9px;color:#8fa2b8}
+.active-counts .hot{color:#4ee0a3}.active-counts .blocked{color:#ff7b8a}
+
+.active-empty{padding:22px 14px;text-align:center;color:#8292a7}
+.active-empty b{display:block;color:#c8d5e5;margin-bottom:4px}
+.active-table td,.active-table th{padding-top:7px!important;padding-bottom:7px!important}
+.active-table tbody tr{border-left:3px solid transparent}
+.active-table tbody tr.active-signal{border-left-color:#34d399;background:rgba(52,211,153,.035)}
+.active-table tbody tr.active-armed{border-left-color:#e5ae43;background:rgba(229,174,67,.028)}
+.active-table tbody tr.active-watch,.active-table tbody tr.active-forming{border-left-color:#58a6ff}
+.active-table .event-time{font-variant-numeric:tabular-nums;white-space:nowrap}
+.active-table .event-time b{display:block;color:#dbe9f8;font-size:10px}.active-table .event-time small{display:block;color:#7589a2;font-size:9px}
+
+.background-head{display:flex;justify-content:space-between;align-items:center;padding:7px 9px;border-bottom:1px solid #243346;background:#0e1825}
+.background-head b{font-size:12px}.background-head small{display:block;color:#7f91a8;font-size:9px;margin-top:2px}
+.monitor-table .muted{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.monitor-state{font-size:9px;font-weight:700;letter-spacing:.04em}.monitor-state.ok{color:#42d89c}.monitor-state.wait{color:#8da0b6}.monitor-state.blocked{color:#ff7584}
+
+.signal-time-row{margin-top:8px;padding:7px 8px;border:1px solid #26384d;border-radius:5px;background:#0c1622;display:grid;grid-template-columns:auto 1fr;column-gap:8px;row-gap:2px}
+.signal-time-row span{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#6f849e}
+.signal-time-row b{font-size:10px;color:#d9e7f5;font-variant-numeric:tabular-nums}
+.signal-time-row small{grid-column:2;color:#8194aa;font-size:9px}
+
+/* Active is the operational default; Monitor is intentionally secondary. */
+.bottom-tabs button[data-tab="signals"]{font-weight:700}
+.bottom-tabs button[data-tab="radar"]{opacity:.82}
+
+@media(max-width:1100px){
+  .active-table th:nth-child(7),.active-table td:nth-child(7){display:none}
+  .active-desk-head{align-items:flex-start}.active-counts{flex-direction:column;gap:1px}
+}
