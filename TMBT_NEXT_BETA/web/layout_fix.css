@@ -1,59 +1,38 @@
 :root{--bottom:300px}
 
-/*
-  App shell: explicit rows instead of height arithmetic. This is the critical
-  fix for the bottom drawer overlapping the chart/PD strip when it is enlarged.
-*/
+/* Explicit app rows: topbar | workspace | drawer grip | drawer. */
 html,body,#app{height:100%;min-height:0;overflow:hidden}
 #app{
   display:grid!important;
   grid-template-rows:54px minmax(0,1fr) 10px minmax(36px,var(--bottom));
-  width:100%;
-  height:100dvh!important;
-  min-height:0;
-  overflow:hidden;
+  width:100%;height:100dvh!important;min-height:0;overflow:hidden;
 }
 .topbar{grid-row:1;height:54px!important;min-height:54px;max-height:54px;overflow:hidden}
 .workspace{
-  grid-row:2;
-  height:auto!important;
-  min-height:0!important;
-  max-height:none!important;
-  align-self:stretch;
-  overflow:hidden;
+  grid-row:2;height:auto!important;min-height:0!important;max-height:none!important;
+  align-self:stretch;overflow:hidden;
 }
+
+/* Splitters */
+.splitter-v{position:relative;z-index:12;touch-action:none}
+.splitter-v:after{content:"";position:absolute;top:0;bottom:0;left:-3px;right:-3px;cursor:col-resize}
 .splitter-h{
-  grid-row:3;
-  height:10px!important;
-  min-height:10px;
-  max-height:10px;
-  position:relative;
-  cursor:ns-resize;
-  background:#121d29;
-  border-top:1px solid #25364b;
-  border-bottom:1px solid #25364b;
-  z-index:20;
-  touch-action:none;
+  grid-row:3;height:10px!important;min-height:10px;max-height:10px;position:relative;
+  cursor:ns-resize;background:#121d29;border-top:1px solid #25364b;border-bottom:1px solid #25364b;
+  z-index:20;touch-action:none;
 }
 .splitter-h:before{content:"";position:absolute;left:50%;top:50%;width:84px;height:3px;transform:translate(-50%,-50%);border-radius:3px;background:#47647f;opacity:.8}
 .splitter-h:hover{background:#1a2b3d}.splitter-h:hover:before{background:#72a9d5;opacity:1}
+
 .bottom-panel{
-  grid-row:4;
-  height:auto!important;
-  min-height:0!important;
-  max-height:none!important;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden!important;
-  position:relative;
-  z-index:5;
-  background:#0d141e;
+  grid-row:4;height:auto!important;min-height:0!important;max-height:none!important;
+  display:flex;flex-direction:column;overflow:hidden!important;position:relative;z-index:5;background:#0d141e;
 }
 .bottom-tabs{flex:0 0 36px;min-height:36px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;white-space:nowrap}
 .bottom-tabs::-webkit-scrollbar{display:none}
 .bottom-content{height:auto!important;min-height:0!important;flex:1 1 auto;overflow:auto!important;overscroll-behavior:contain}
 
-/* Never allow workspace content to paint outside its row. */
+/* Strict paint bounds: no chart/inspector content can spill into the drawer. */
 .panel,.left,.right,.chart-section{min-height:0!important;max-height:100%;overflow:hidden}
 .panel{overflow-y:auto;overflow-x:hidden}
 .chart-section{display:flex;flex-direction:column}
@@ -61,18 +40,23 @@ html,body,#app{height:100%;min-height:0;overflow:hidden}
 .chart-host{flex:1 1 auto;min-height:0!important;height:auto!important;overflow:hidden!important}
 .pd-strip{flex:0 0 56px;min-height:56px;max-height:56px}
 
-/* Resizing controls */
+/* Drawer controls */
 .bottom-tabs .bottom-resize-btn{min-width:28px;padding:4px 7px;border:1px solid #223247;background:#111a25;color:#9badc2;border-radius:5px;flex:0 0 auto}
 .bottom-tabs .bottom-resize-btn:hover{background:#19283a;color:#d4e5f5}
-body.bottom-resizing{cursor:ns-resize!important;user-select:none!important}
-body.bottom-resizing *{cursor:ns-resize!important}
+body.bottom-resizing,body.side-resizing{user-select:none!important}
+body.bottom-resizing,body.bottom-resizing *{cursor:ns-resize!important}
+body.side-resizing,body.side-resizing *{cursor:col-resize!important}
 
-/* Keep tables inside the drawer; headers remain visible while the body scrolls. */
+/* Tables stay inside their own scroller. */
 .bottom-content>.tab{min-width:0;max-width:100%}
 .bottom-content .table{min-width:760px}
 .bottom-content .table th{top:0}
 
-/* Compact safely on short displays instead of allowing overlap. */
+/* Runtime audit card shown in System. */
+.layout-audit-card{display:grid;grid-template-columns:auto 1fr auto;gap:6px 9px;align-items:center;margin:0 0 9px;padding:8px 10px;border:1px solid #28513f;border-radius:7px;background:#0f201b}
+.layout-audit-card.bad{border-color:#693641;background:#28171c}.layout-audit-card b{font-size:10px}.layout-audit-card small{grid-column:2/4;color:var(--muted);font-size:9px}.layout-audit-card .audit-state{font-size:8px;font-weight:800;letter-spacing:.06em;color:var(--green)}.layout-audit-card.bad .audit-state{color:var(--red)}
+
+/* Compact safely on short displays rather than allowing overlap. */
 @media(max-height:760px){
   :root{--bottom:240px}
   .chart-toolbar{flex-basis:42px;min-height:42px}
