@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any, Callable
 
 from context_factors import ContextConfig, DEFAULT_CONFIG, evaluate_bars
+import smt_trade_management
 
 
 # Vendor-agnostic hook for Trading Model Backtest Studio.
@@ -26,6 +27,11 @@ DEFAULT_BACKTEST_CONTEXT = {
     "midnight_enabled": True,
     "midnight_open_ny": "00:00",
     "store_context_columns": True,
+    "smt_profit_take_enabled": True,
+    "smt_profit_take_raw_enabled": True,
+    "smt_profit_take_partial_min_r": 1.0,
+    "smt_profit_take_partial_fraction": 0.5,
+    "smt_profit_take_confirmed_exit_review": True,
 }
 
 
@@ -77,7 +83,7 @@ def context_at(
     peer_5m = load_bars(peer, "5m", as_of_ms, 1800) or []
     target_smt = load_bars(target, cfg.smt_tf, as_of_ms, 700) or []
     peer_smt = load_bars(peer, cfg.smt_tf, as_of_ms, 700) or []
-    return evaluate_bars(
+    ctx = evaluate_bars(
         target_5m,
         peer_5m,
         target_smt,
@@ -85,12 +91,15 @@ def context_at(
         as_of_ms=as_of_ms,
         cfg=cfg,
     )
+    ctx["symmetric_smt"] = smt_trade_management.symmetric_smt(ctx)
+    return ctx
 
 
 def flatten_context(ctx: dict[str, Any], market: str) -> dict[str, Any]:
     market = str(market or "").upper()
     levels = (ctx.get("markets") or {}).get(market, {}) or {}
     smt = ctx.get("smt") or {}
+    symmetric = ctx.get("symmetric_smt") or smt_trade_management.symmetric_smt(ctx)
     return {
         "ctx_bias": ctx.get("bias"),
         "ctx_quality": ctx.get("quality"),
@@ -101,6 +110,10 @@ def flatten_context(ctx: dict[str, Any], market: str) -> dict[str, Any]:
         "ctx_smt_state": smt.get("state"),
         "ctx_smt_sweeper": smt.get("sweeper"),
         "ctx_smt_holder": smt.get("holder"),
+        "ctx_smt_symmetric_bias": symmetric.get("bias"),
+        "ctx_smt_raw_bias": symmetric.get("raw_bias"),
+        "ctx_smt_raw_sweeper": symmetric.get("raw_sweeper"),
+        "ctx_smt_raw_holder": symmetric.get("raw_holder"),
         "ctx_po3_bias": levels.get("po3_bias"),
         "ctx_po3_phase": levels.get("po3_phase"),
         "ctx_asia_high": levels.get("asia_high"),
@@ -146,14 +159,95 @@ def apply_candidate_filter(
     elif side == "SHORT":
         allowed = bool(ctx.get("allow_short", True))
 
+    # Symmetric SMT: direction does not depend on which correlated index raids
+    # liquidity. High divergence is bearish, low divergence bullish.
+    symmetric = ctx.get("symmetric_smt") or {}
+    sbias = symmetric.get("bias")
+    if options.get("smt_hard_veto", True):
+        if side == "LONG" and sbias in {"BEARISH", "CONFLICT"}:
+            allowed = False
+        elif side == "SHORT" and sbias in {"BULLISH", "CONFLICT"}:
+            allowed = False
+
     out["context_filter_allowed"] = allowed
-    out["context_filter_reason"] = None if allowed else (ctx.get("veto_reason") or "context veto")
+    out["context_filter_reason"] = None if allowed else (symmetric.get("reason") or ctx.get("veto_reason") or "context veto")
     out["context_filter"] = {
         "bias": ctx.get("bias"),
         "quality": ctx.get("quality"),
         "SMT": (ctx.get("smt") or {}).get("bias"),
+        "SMT_symmetric": symmetric.get("bias"),
+        "SMT_raw": symmetric.get("raw_bias"),
         "PO3": ((ctx.get("markets") or {}).get(market, {}) or {}).get("po3_bias"),
         "PO3_phase": ((ctx.get("markets") or {}).get(market, {}) or {}).get("po3_phase"),
         "allowed": allowed,
     }
+    return out
+
+
+def manage_open_trade(
+    trade: dict[str, Any],
+    load_bars: Callable[[str, str, int, int], list[dict[str, Any]]],
+    *,
+    as_of_ms: int,
+    current_price: float | None = None,
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Backtest/paper hook for SMT-based profit taking after entry.
+
+    Raw opposite SMT is deliberately earlier than the entry veto: it fires on the
+    liquidity raid itself and can therefore protect open profit before a reclaim
+    confirms the reversal. Confirmed opposite SMT upgrades the state to
+    EXIT_REVIEW. The caller decides whether TAKE_PARTIAL means 25%, 50%, etc.;
+    the default experiment is 50% once >=1R is available.
+    """
+    out = dict(trade)
+    market = str(out.get("market") or out.get("symbol") or "").upper()
+    if market not in {"NQ", "ES"}:
+        return out
+
+    options = dict(DEFAULT_BACKTEST_CONTEXT)
+    options.update(overrides or {})
+    if not options.get("smt_profit_take_enabled", True):
+        out["smt_profit_take_action"] = "HOLD"
+        return out
+
+    ctx = context_at(load_bars, market=market, as_of_ms=as_of_ms, overrides=options)
+    side = _side(out.get("side"))
+    if current_price is None:
+        rows = load_bars(market, "5m", as_of_ms, 10) or []
+        if rows:
+            last = rows[-1]
+            current_price = last.get("c") if last.get("c") is not None else last.get("close")
+
+    r_now = smt_trade_management.current_r(
+        side,
+        out.get("entry"),
+        out.get("stop") if out.get("stop") is not None else out.get("sl"),
+        current_price,
+    )
+    advice = smt_trade_management.profit_take_advice(
+        ctx,
+        trade_side=side,
+        current_r_value=r_now,
+        partial_min_r=float(options.get("smt_profit_take_partial_min_r", 1.0)),
+    )
+
+    # Allow A/B tests without changing the detector itself.
+    if not options.get("smt_profit_take_raw_enabled", True) and not advice.get("adverse_confirmed"):
+        advice["action"] = "HOLD"
+        advice["reason"] = "raw SMT profit taking disabled"
+    if not options.get("smt_profit_take_confirmed_exit_review", True) and advice.get("action") == "EXIT_REVIEW":
+        advice["action"] = "TAKE_PARTIAL"
+        advice["reason"] = "confirmed SMT detected; full-exit review disabled"
+
+    advice["partial_fraction"] = float(options.get("smt_profit_take_partial_fraction", 0.5))
+    advice["as_of_ms"] = as_of_ms
+    advice["current_price"] = current_price
+    out["smt_profit_take_action"] = advice.get("action")
+    out["smt_profit_take_reason"] = advice.get("reason")
+    out["smt_profit_take_current_r"] = r_now
+    out["smt_profit_take_fraction"] = advice.get("partial_fraction")
+    out["smt_profit_take"] = advice
+    if options.get("store_context_columns", True):
+        out.update(flatten_context(ctx, market))
     return out
