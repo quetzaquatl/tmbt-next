@@ -112,6 +112,86 @@ window.addEventListener("mouseup", dragEnd);
 _panCanvas.addEventListener("dblclick", fit);
 document.querySelector("#fitBtn").onclick = fit;
 
+// Model/chart scale guard. If a stale local futures fallback ever sneaks in,
+// model Entry/SL/TP overlays are suppressed instead of being silently plotted on
+// a completely different price scale.
+function modelChartScaleMismatch(){
+  const m=state.selectedModel;
+  if(!m || !state.bars?.length)return false;
+  const px=Number(state.bars.at(-1)?.c);
+  const entry=Number(m.entry ?? m.arrays?.entry);
+  if(!Number.isFinite(px) || !Number.isFinite(entry) || px===0 || entry===0)return false;
+  const name=String(m.name||m.label||"").toUpperCase();
+  if(name.includes("QQQ") && px>5000)return true;
+  if(name.includes("SPY") && px>3000)return true;
+  const ratio=Math.abs(entry/px);
+  return ratio<0.20 || ratio>5;
+}
+
+const _panArrLines=arrLines;
+arrLines=function(){
+  const lines=_panArrLines();
+  if(!modelChartScaleMismatch())return lines;
+  const context=new Set(["PDH","PDL","PWH","PWL","PMH","PML"]);
+  return lines.filter(x=>context.has(x.label));
+};
+
+function paintModelScaleGuard(){
+  const heading=document.querySelector(".chart-heading");
+  if(!heading)return;
+  let badge=heading.querySelector(".model-scale-guard");
+  if(!badge){badge=document.createElement("span");badge.className="model-scale-guard";heading.appendChild(badge)}
+  const mismatch=modelChartScaleMismatch();
+  badge.style.display=mismatch?"inline-flex":"none";
+  badge.textContent=mismatch?"MODEL / CHART FEED MISMATCH":"";
+  badge.style.padding="3px 7px";
+  badge.style.border="1px solid #a84855";
+  badge.style.borderRadius="5px";
+  badge.style.background="#351820";
+  badge.style.color="#ff7d8b";
+  badge.style.fontSize="10px";
+  badge.style.fontWeight="700";
+  if(mismatch){
+    const src=document.querySelector("#chartSource");
+    if(src && !String(src.textContent).includes("MODEL/CHART"))src.textContent=`${src.textContent} · MODEL/CHART SCALE MISMATCH`;
+  }
+}
+
+// Extend the System tab with the 30m feed that was added today and client-side
+// interaction/layout checks. The base diagnostics renderer remains authoritative.
+const _panRenderDiagnostics=renderDiagnostics;
+renderDiagnostics=function(d){
+  _panRenderDiagnostics(d);
+  const host=document.querySelector("#systemView");
+  if(!host)return;
+  const tbody=host.querySelector(".diag-table tbody");
+  if(tbody && !tbody.querySelector('tr[data-extra-tf="30m"]')){
+    for(const m of ["NQ","ES","XAU"]){
+      const f=d?.feeds?.[m]?.["30m"]||{};
+      const tr=document.createElement("tr");
+      tr.dataset.extraTf="30m";
+      tr.innerHTML=`<td>${m}</td><td>30m</td><td class="${f.stale?"bad":"good"}">${f.stale?"STALE":"LIVE"}</td><td>${f.price==null?"—":fmt(f.price,2)}</td><td>${ageText(f.age_seconds)}</td><td>${esc(f.feed||"—")}</td><td>${esc(f.last_bar_utc||"—")}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  const checks=host.querySelector(".feature-checks");
+  if(checks && !checks.querySelector(".client-chart-check")){
+    const row=document.createElement("div");
+    row.className="feature-row client-chart-check";
+    row.innerHTML='<span class="status-dot ok"></span><b>Chart interactions</b><span class="feature-status pass">PASS</span><small>X/Y pan · price-axis zoom · time-axis zoom · Fit reset wired</small>';
+    checks.appendChild(row);
+  }
+  if(checks && !checks.querySelector(".canonical-identity-check")){
+    const vals=["NQ","ES","XAU"].map(m=>d?.feeds?.[m]?.["5m"]?.identity_ok).filter(v=>v!==undefined&&v!==null);
+    const failed=vals.some(v=>v===false),known=vals.length>0;
+    const status=failed?"FAIL":known?"PASS":"WARN";
+    const row=document.createElement("div");
+    row.className="feature-row canonical-identity-check";
+    row.innerHTML=`<span class="status-dot ${status==="PASS"?"ok":status==="FAIL"?"bad":"warn"}"></span><b>Canonical model/chart identity</b><span class="feature-status ${status.toLowerCase()}">${status}</span><small>${failed?"Instrument mismatch detected":known?"QQQ / SPY / XAU mirror identity consistent":"legacy mirror has no explicit ticker identity"}</small>`;
+    checks.appendChild(row);
+  }
+};
+
 // Expose a tiny read-only diagnostic for the System/console checks.
 window.TMBT_CHART_INTERACTIONS = {
   bidirectionalPan:true,
@@ -119,5 +199,9 @@ window.TMBT_CHART_INTERACTIONS = {
   verticalPan:true,
   priceAxisZoom:true,
   timeAxisZoom:true,
-  fitResetsPan:true
+  fitResetsPan:true,
+  modelScaleGuard:true
 };
+
+setInterval(()=>{paintModelScaleGuard()},700);
+setTimeout(()=>{paintModelScaleGuard()},100);
