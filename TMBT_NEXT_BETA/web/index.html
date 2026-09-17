@@ -24,9 +24,9 @@
   <aside class="left panel" id="leftPanel">
     <div class="panel-title"><b>Markets & Modelle</b><button id="leftHide">‹</button></div>
     <div class="quotes">
-      <div data-goto="NQ"><b>NQ</b><strong id="qNQ">—</strong><small>futures / context</small></div>
-      <div data-goto="ES"><b>ES</b><strong id="qES">—</strong><small>futures / context</small></div>
-      <div data-goto="XAU"><b>XAU</b><strong id="qXAU">—</strong><small>spot</small></div>
+      <div data-goto="NQ"><b>NQ</b><strong id="qNQ">—</strong><small>QQQ proxy · Twelve</small></div>
+      <div data-goto="ES"><b>ES</b><strong id="qES">—</strong><small>SPY proxy · Twelve</small></div>
+      <div data-goto="XAU"><b>XAU</b><strong id="qXAU">—</strong><small>XAU/USD spot · Twelve</small></div>
     </div>
     <div class="section-label">Live models</div>
     <div id="modelList"></div>
@@ -35,7 +35,7 @@
 
   <section class="chart-section">
     <div class="chart-toolbar">
-      <div class="chart-heading"><span class="chart-kicker">LIVE DESK</span><div><b id="chartTitle">NQ · 1H</b><small id="chartSource">lokaler Cache</small></div></div>
+      <div class="chart-heading"><span class="chart-kicker">LIVE DESK</span><div><b id="chartTitle">NQ · 1H</b><small id="chartSource">Original Twelve Pipeline</small></div></div>
       <div class="toolbar-buttons">
         <button id="liveModeBtn" class="active">● LIVE</button>
         <button id="pdBtn" class="active">PD Arrays</button>
@@ -97,4 +97,5 @@
 </section>
 <div id="toast"></div>
 <script src="app.js"></script>
+<script src="original_compat.js"></script>
 </body></html>
