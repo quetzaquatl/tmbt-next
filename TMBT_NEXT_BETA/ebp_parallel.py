@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -14,6 +14,14 @@ def _f(v: Any, default: float | None = None) -> float | None:
         return default
 
 
+def _ms(v: Any) -> int | None:
+    try:
+        n = float(v)
+        return int(n if n > 1e12 else n * 1000)
+    except Exception:
+        return None
+
+
 def _touch(bar: dict[str, Any], level: float) -> bool:
     lo = _f(bar.get("l"))
     hi = _f(bar.get("h"))
@@ -25,6 +33,22 @@ def _fmt_tf(tf: str) -> str:
     if z == "1h":
         return "1H"
     return z
+
+
+def _closed_bars(bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Use only confirmed candles; never let an open candle create an EBP."""
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    out = []
+    for b in bars or []:
+        if not all(_f(b.get(k)) is not None for k in ("o", "h", "l", "c")):
+            continue
+        close_ms = _ms(b.get("close_t"))
+        # If a provider omits close_t we accept the row only when its timestamp is
+        # already in the past; normalized futures mirrors always provide close_t.
+        if close_ms is not None and close_ms > now_ms:
+            continue
+        out.append(b)
+    return out
 
 
 def _classify_signal(prev: dict[str, Any], ebp: dict[str, Any]):
@@ -101,7 +125,7 @@ def evaluate_ebp(
     stale: bool = False,
 ) -> dict[str, Any]:
     tf = _fmt_tf(tf)
-    clean = [b for b in (bars or []) if all(_f(b.get(k)) is not None for k in ("o", "h", "l", "c"))]
+    clean = _closed_bars(bars)
     enough = len(clean) >= 20
     proxy = str(ticker or "").upper().replace(" ", "") in {"QQQ", "TWELVE:QQQ", "SPY", "TWELVE:SPY"}
     identity = "QQQ proxy" if market == "NQ" and proxy else "SPY proxy" if market == "ES" and proxy else market
@@ -127,32 +151,15 @@ def evaluate_ebp(
 
     if not enough:
         return {
-            "id": model_id,
-            "name": label,
-            "market": market,
-            "tf": tf,
-            "source": source,
-            "status": "IDLE",
-            "side": "—",
-            "entry": None,
-            "sl": None,
-            "tp": None,
-            "rr": None,
+            "id": model_id, "name": label, "market": market, "tf": tf, "source": source,
+            "status": "IDLE", "side": "—", "entry": None, "sl": None, "tp": None, "rr": None,
             "message": f"Zu wenige geschlossene {tf}-Bars für EBP-Auswertung.",
             "validity": {"status": "INVALID", "still_valid": False, "reason": "insufficient_bars"},
-            "criteria": [{"label": f"Genügend {tf}-Bars", "status": "FAIL", "detail": f"{len(clean)} Bars geladen; mindestens 20 benötigt."}],
-            "logic": base_logic,
-            "arrays": {},
-            "event": {},
-            "setup_key": None,
-            "preflight": True,
-            "proxy": proxy,
-            "feed_stale": stale,
+            "criteria": [{"label": f"Genügend {tf}-Bars", "status": "FAIL", "detail": f"{len(clean)} geschlossene Bars geladen; mindestens 20 benötigt."}],
+            "logic": base_logic, "arrays": {}, "event": {}, "setup_key": None,
+            "preflight": True, "proxy": proxy, "feed_stale": stale,
         }
 
-    # Find the most recent qualifying EBP pair. We keep expired setups visible so
-    # the UI proves the engine is evaluating the full lifecycle rather than only
-    # surfacing current signals.
     found = None
     found_i = None
     start = max(1, len(clean) - 120)
@@ -165,30 +172,16 @@ def evaluate_ebp(
     if found is None:
         last = clean[-1]
         return {
-            "id": model_id,
-            "name": label,
-            "market": market,
-            "tf": tf,
-            "source": source,
-            "status": "IDLE",
-            "side": "—",
-            "entry": None,
-            "sl": None,
-            "tp": None,
-            "rr": None,
+            "id": model_id, "name": label, "market": market, "tf": tf, "source": source,
+            "status": "IDLE", "side": "—", "entry": None, "sl": None, "tp": None, "rr": None,
             "message": f"Kein bestätigtes EBP-Paar in den letzten {min(120, len(clean)-1)} {tf}-Bars.",
             "validity": {"status": "VALID", "still_valid": False, "reason": "no_setup"},
             "criteria": [
                 {"label": f"Genügend {tf}-Bars", "status": "PASS", "detail": f"{len(clean)} geschlossene Bars geladen."},
                 {"label": f"Previous {tf} Liquidity Sweep + Engulf Close", "status": "PENDING", "detail": "Noch kein gültiges Paar gefunden."},
             ],
-            "logic": base_logic,
-            "arrays": {},
-            "event": {"event_ms": last.get("t")},
-            "setup_key": None,
-            "preflight": True,
-            "proxy": proxy,
-            "feed_stale": stale,
+            "logic": base_logic, "arrays": {}, "event": {"event_ms": last.get("t")}, "setup_key": None,
+            "preflight": True, "proxy": proxy, "feed_stale": stale,
         }
 
     ebp = found["ebp"]
@@ -250,40 +243,19 @@ def evaluate_ebp(
     ]
     setup_key = f"{side}:{int(_f(ebp.get('t'), 0) or 0)}:{tf}"
     arrays = {
-        "entry": found["entry"],
-        "stop": found["stop"],
-        "target": found["target"],
-        "prev_high": _f(prev.get("h")),
-        "prev_low": _f(prev.get("l")),
-        "prev_body_high": prev_body_hi,
-        "prev_body_low": prev_body_lo,
-        "signal_high": _f(ebp.get("h")),
-        "signal_low": _f(ebp.get("l")),
+        "entry": found["entry"], "stop": found["stop"], "target": found["target"],
+        "prev_high": _f(prev.get("h")), "prev_low": _f(prev.get("l")),
+        "prev_body_high": prev_body_hi, "prev_body_low": prev_body_lo,
+        "signal_high": _f(ebp.get("h")), "signal_low": _f(ebp.get("l")),
     }
     return {
-        "id": model_id,
-        "name": label,
-        "market": market,
-        "tf": tf,
-        "source": source,
-        "status": stage,
-        "side": side,
-        "entry": found["entry"],
-        "sl": found["stop"],
-        "tp": found["target"],
-        "rr": 2.0,
-        "message": msg,
-        "validity": validity,
-        "criteria": criteria,
-        "logic": base_logic,
-        "arrays": arrays,
+        "id": model_id, "name": label, "market": market, "tf": tf, "source": source,
+        "status": stage, "side": side, "entry": found["entry"], "sl": found["stop"],
+        "tp": found["target"], "rr": 2.0, "message": msg, "validity": validity,
+        "criteria": criteria, "logic": base_logic, "arrays": arrays,
         "event": {"event_ms": ebp.get("t"), "touch_ms": touch_bar.get("t") if touch_bar else None},
-        "setup_key": setup_key,
-        "preflight": True,
-        "proxy": proxy,
-        "feed_stale": stale,
-        "close_class": found["close_class"],
-        "retrace_pct": retrace,
+        "setup_key": setup_key, "preflight": True, "proxy": proxy, "feed_stale": stale,
+        "close_class": found["close_class"], "retrace_pct": retrace,
     }
 
 
@@ -292,16 +264,12 @@ def build_parallel_models(query_fn) -> list[dict[str, Any]]:
     for market in ("NQ", "ES"):
         for tf in TF_LABELS:
             q = query_fn(market, tf, 800, None) or {}
-            out.append(
-                evaluate_ebp(
-                    market,
-                    tf,
-                    q.get("bars") or [],
-                    source=q.get("provider") or q.get("feed") or "",
-                    ticker=q.get("tickerid") or q.get("ticker") or "",
-                    stale=bool(q.get("stale", True)),
-                )
-            )
+            out.append(evaluate_ebp(
+                market, tf, q.get("bars") or [],
+                source=q.get("provider") or q.get("feed") or "",
+                ticker=q.get("tickerid") or q.get("ticker") or "",
+                stale=bool(q.get("stale", True)),
+            ))
     return out
 
 
@@ -310,13 +278,9 @@ def preflight_report(query_fn) -> dict[str, Any]:
     checks = []
     for m in models:
         checks.append({
-            "model": m["name"],
-            "market": m["market"],
-            "tf": m["tf"],
-            "engine_ok": bool(m.get("criteria")),
-            "feed_stale": bool(m.get("feed_stale")),
-            "proxy": bool(m.get("proxy")),
-            "stage": m.get("status"),
+            "model": m["name"], "market": m["market"], "tf": m["tf"],
+            "engine_ok": bool(m.get("criteria")), "feed_stale": bool(m.get("feed_stale")),
+            "proxy": bool(m.get("proxy")), "stage": m.get("status"),
             "setup_key": m.get("setup_key"),
             "actionable_now": not bool(m.get("feed_stale")) and not bool(m.get("proxy")),
         })
