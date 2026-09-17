@@ -6,14 +6,14 @@ if not defined TMBT_WORKSPACE set "TMBT_WORKSPACE=D:\Projekt model\Trading_Model
 set "TMBT_NEXT_PORT=8510"
 echo.
 echo =========================================
-echo TMBT NEXT BETA 0.9.12 EBP MATRIX READY
+echo TMBT NEXT BETA 0.9.13 EBP FUTURES READY
 echo =========================================
 echo Workspace: %TMBT_WORKSPACE%
 echo URL: http://127.0.0.1:%TMBT_NEXT_PORT%
 echo EBP matrix: NQ / ES x 15m / 30m / 1H
 echo Closed-bar evaluator active; 4-bar retest window; 2R target.
-echo Safety: QQQ/SPY proxy feeds are monitoring-only and cannot fire live alerts.
-echo True futures feed is required for actionable NYSE-open signals.
+echo Feed priority: true NQ/ES futures mirror -^> QQQ/SPY monitoring-only fallback.
+echo Safety: proxy or stale feeds cannot fire live alerts.
 echo Preflight endpoint: http://127.0.0.1:%TMBT_NEXT_PORT%/api/preflight
 echo.
 start "" "http://127.0.0.1:%TMBT_NEXT_PORT%"
