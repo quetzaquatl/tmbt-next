@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TMBT Next</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+<header class="topbar">
+  <div class="brand"><div class="logo">T</div><div><b>TMBT NEXT</b><small id="version">loading…</small></div></div>
+  <div class="marketbar">
+    <button data-market="NQ" class="active">NQ</button><button data-market="ES">ES</button><button data-market="XAU">XAU</button>
+  </div>
+  <div class="tfbar">
+    <button data-tf="5m">5m</button><button data-tf="15m">15m</button><button data-tf="1H" class="active">1H</button><button data-tf="4H">4H</button><button data-tf="1D">1D</button>
+  </div>
+  <div class="spacer"></div>
+  <button id="alertsBtn" class="ghost">🔔 Alerts</button>
+  <a class="button ghost" href="http://127.0.0.1:8502" target="_blank">Old Studio ↗</a>
+  <div class="health"><span><i id="liveDot"></i>Live</span><span><i id="paperDot"></i>Paper</span><span><i id="researchDot"></i>Research</span></div>
+</header>
+
+<main class="workspace">
+  <aside class="left panel" id="leftPanel">
+    <div class="panel-title"><b>Markets & Modelle</b><button id="leftHide">‹</button></div>
+    <div class="quotes">
+      <div data-goto="NQ"><b>NQ</b><strong id="qNQ">—</strong><small>futures / context</small></div>
+      <div data-goto="ES"><b>ES</b><strong id="qES">—</strong><small>futures / context</small></div>
+      <div data-goto="XAU"><b>XAU</b><strong id="qXAU">—</strong><small>spot</small></div>
+    </div>
+    <div class="section-label">Live models</div>
+    <div id="modelList"></div>
+  </aside>
+  <div class="splitter-v" id="splitLeft"></div>
+
+  <section class="chart-section">
+    <div class="chart-toolbar">
+      <div><b id="chartTitle">NQ · 1H</b><small id="chartSource">lokaler Cache</small></div>
+      <div class="toolbar-buttons">
+        <button id="liveModeBtn" class="active">● LIVE</button>
+        <button id="pdBtn" class="active">PD Arrays</button>
+        <button id="sessionsBtn" class="active">Sessions</button>
+        <button id="fitBtn">Fit</button>
+      </div>
+    </div>
+    <div class="chart-host" id="chartHost">
+      <canvas id="chart"></canvas>
+      <div class="chart-legend"><span id="ohlcText">O — H — L — C —</span><span id="cursorTime"></span></div>
+      <div class="snapshot-banner" id="snapshotBanner"><b>FROZEN SNAPSHOT</b><span id="snapshotName"></span><button id="backLive">Zurück zu Live</button></div>
+      <div class="chart-empty" id="chartEmpty">Lade Bars…</div>
+    </div>
+    <div class="pd-strip">
+      <div><small>Previous Month</small><b id="pm">—</b><em id="pmPos">—</em></div>
+      <div><small>Previous Week</small><b id="pw">—</b><em id="pwPos">—</em></div>
+      <div><small>Previous Day</small><b id="pd">—</b><em id="pdPos">—</em></div>
+      <div><small>Selected setup</small><b id="selectedSetup">—</b><em id="selectedState">—</em></div>
+    </div>
+  </section>
+
+  <div class="splitter-v" id="splitRight"></div>
+  <aside class="right panel" id="rightPanel">
+    <div class="panel-title"><b>Setup Inspector</b><button id="rightHide">›</button></div>
+    <div id="inspector" class="inspector empty-inspector">
+      <span class="pill idle">NO SETUP</span><h3>Kein Modell ausgewählt</h3><p>Links ein Modell anklicken.</p>
+    </div>
+    <div class="metrics">
+      <div><small>Entry</small><b id="iEntry">—</b></div><div><small>Stop</small><b id="iStop">—</b></div>
+      <div><small>Target</small><b id="iTarget">—</b></div><div><small>RR</small><b id="iRR">—</b></div>
+    </div>
+    <div class="section-label">Kriterien</div><div id="criteria" class="criteria"><p>—</p></div>
+    <div class="section-label">Logik</div><div id="logic" class="logic"><p>—</p></div>
+  </aside>
+</main>
+
+<div class="splitter-h" id="splitBottom"></div>
+<section class="bottom-panel">
+  <div class="bottom-tabs">
+    <button data-tab="signals" class="active">Signals</button>
+    <button data-tab="archive">Archive</button>
+    <button data-tab="outcomes">Outcomes</button>
+    <button data-tab="research">Research</button>
+    <button data-tab="paper">Paper</button>
+    <button data-tab="logs">Logs</button>
+    <div class="spacer"></div><button id="bottomHide">⌄</button>
+  </div>
+  <div class="bottom-content">
+    <div class="tab active" id="tab-signals"><div id="signalsTable"></div></div>
+    <div class="tab" id="tab-archive">
+      <div class="filters"><input id="archiveSearch" placeholder="Model / Market / Status suchen…"><select id="archiveStage"><option value="">Alle Status</option><option>SIGNAL</option><option>CLOSED</option><option>EXPIRED</option><option>ARMED</option><option>WATCH</option></select><span id="archiveCount"></span></div>
+      <div id="archiveTable"></div>
+    </div>
+    <div class="tab" id="tab-outcomes"><div id="outcomeCards"></div></div>
+    <div class="tab" id="tab-research"><div id="researchList"></div></div>
+    <div class="tab" id="tab-paper"><div id="paperView"></div></div>
+    <div class="tab" id="tab-logs"><pre id="logs">TMBT Next gestartet.</pre></div>
+  </div>
+</section>
+<div id="toast"></div>
+<script src="app.js"></script>
+</body></html>
