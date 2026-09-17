@@ -184,8 +184,6 @@ def _decorate_local(local, market="NQ", tf="1H"):
     now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
     bar_age = max(0.0, (now_ms - last_ms) / 1000.0) if last_ms else None
 
-    # File mtime catches a writer that keeps the active candle open; candle age
-    # catches a database file that is touched for unrelated series only.
     file_age = None
     db = local.get("db")
     try:
@@ -197,14 +195,17 @@ def _decorate_local(local, market="NQ", tf="1H"):
     stale_after = _STALE_AFTER.get(ntf, 3 * 60 * 60)
     stale = bar_age is None or bar_age > stale_after
     src = local.get("source") or last.get("source") or "local"
+    ticker = last.get("market") or str(market).upper()
     local["feed"] = "original_sqlite"
     local["provider"] = src
+    local["ticker"] = ticker
+    local["tickerid"] = ticker
     local["source"] = None
     local["last_bar_utc"] = datetime.fromtimestamp(last_ms / 1000.0, tz=timezone.utc).isoformat() if last_ms else None
     local["age_seconds"] = bar_age
     local["file_age_seconds"] = file_age
     local["stale"] = stale
-    local["note"] = f"{src} · original local feed · {'STALE' if stale else 'LIVE'} · bar age {_age_text(bar_age)}"
+    local["note"] = f"{src} · {ticker} · original local feed · {'STALE' if stale else 'LIVE'} · bar age {_age_text(bar_age)}"
     return local
 
 
@@ -263,6 +264,66 @@ def feed_status():
     }
 
 
+def feature_checks():
+    checks = []
+
+    def add(name, status, detail, count=None):
+        row = {"name": name, "status": status, "detail": detail}
+        if count is not None:
+            row["count"] = count
+        checks.append(row)
+
+    try:
+        models = core.normalize_models()
+        st = core.signal_status() or {}
+        running = st.get("running") is not False
+        add("Live models", "PASS" if models and running else ("WARN" if models else "FAIL"), f"{len(models)} Modelle · monitor {st.get('state') or ('running' if running else 'stopped')}", len(models))
+    except Exception as exc:
+        add("Live models", "FAIL", str(exc))
+
+    try:
+        rows = core.archive_rows(500)
+        snap_dir = core.WORKSPACE / "live_signals" / "snapshots"
+        snaps = len(list(snap_dir.glob("*.json"))) if snap_dir.exists() else 0
+        add("Archive + snapshots", "PASS" if rows else "WARN", f"{len(rows)} Archiveinträge · {snaps} Snapshots", len(rows))
+    except Exception as exc:
+        add("Archive + snapshots", "FAIL", str(exc))
+
+    try:
+        outs = core.outcome_summary()
+        add("Outcomes", "PASS" if outs else "WARN", f"{len(outs)} Modell-Summaries", len(outs))
+    except Exception as exc:
+        add("Outcomes", "FAIL", str(exc))
+
+    try:
+        paper = core.paper_payload()
+        ps = paper.get("status") or {}
+        pstate = paper.get("state") or {}
+        present = bool(ps or pstate)
+        add("Paper account", "PASS" if present else "WARN", f"agent {ps.get('state') or '—'} · open {len(pstate.get('open_positions') or [])}")
+    except Exception as exc:
+        add("Paper account", "FAIL", str(exc))
+
+    try:
+        jobs = core.research_jobs(20)
+        add("Research jobs", "PASS" if jobs else "WARN", f"{len(jobs)} Jobs sichtbar", len(jobs))
+    except Exception as exc:
+        add("Research jobs", "FAIL", str(exc))
+
+    try:
+        pd_ok = 0
+        for m in ("NQ", "ES", "XAU"):
+            x = original_query_bars(m, "1H", 3000, None)
+            levels = core.previous_period_level(x.get("bars") or [], m)
+            if levels.get("PDH") is not None and levels.get("PDL") is not None:
+                pd_ok += 1
+        add("PD/PW/PM arrays", "PASS" if pd_ok == 3 else ("WARN" if pd_ok else "FAIL"), f"{pd_ok}/3 Märkte mit Previous-Day Levels")
+    except Exception as exc:
+        add("PD/PW/PM arrays", "FAIL", str(exc))
+
+    return checks
+
+
 def diagnostics():
     feeds = {}
     for m in ("NQ", "ES", "XAU"):
@@ -281,6 +342,7 @@ def diagnostics():
         "workspace": str(core.WORKSPACE),
         "components": components,
         "feeds": feeds,
+        "features": feature_checks(),
         "hint": "Wenn nur XAU stale ist, läuft die UI korrekt; dann den ursprünglichen Twelve/XAU-Writer im Workspace prüfen.",
     }
 
