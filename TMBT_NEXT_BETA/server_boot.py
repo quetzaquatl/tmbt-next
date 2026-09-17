@@ -4,17 +4,11 @@ import json
 import os
 import runpy
 import subprocess
-import sys
-import time
 from pathlib import Path
 
 
 def workspace() -> Path:
     return Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
-
-
-def collector_dir() -> Path:
-    return Path(os.environ.get("TMBT_TWELVE_DIR", r"D:\Projekt model\Trading_Model_Backtest_Studio_v3_7_DEV")).resolve()
 
 
 def read_json(path: Path) -> dict:
@@ -34,13 +28,16 @@ def pid_alive(pid) -> bool:
         return False
     if os.name == "nt":
         try:
+            # Keep this byte-based. Windows tasklist output is not guaranteed to
+            # use the Python process' active text codepage and previously caused
+            # repeated UnicodeDecodeError reader-thread failures.
             r = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
-                capture_output=True,
-                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 timeout=4,
             )
-            return str(pid) in (r.stdout or "") and "No tasks" not in (r.stdout or "")
+            return str(pid).encode("ascii") in (r.stdout or b"")
         except Exception:
             return False
     try:
@@ -50,98 +47,29 @@ def pid_alive(pid) -> bool:
         return False
 
 
-def collector_status_path() -> Path:
-    return workspace() / "live_data" / "twelve_status.json"
-
-
-def current_collector() -> dict:
-    st = read_json(collector_status_path())
-    st["pid_alive"] = pid_alive(st.get("pid"))
-    return st
-
-
-def choose_python(app_dir: Path) -> Path:
-    candidates = [
-        app_dir / "venv" / "Scripts" / "python.exe",
-        app_dir / ".venv" / "Scripts" / "python.exe",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    return Path(sys.executable)
-
-
-def start_original_twelve_collector() -> None:
-    ws = workspace()
-    app_dir = collector_dir()
-    script = app_dir / "twelve_live.py"
-    status_path = collector_status_path()
-
+def show_collector_status() -> None:
+    status_path = workspace() / "live_data" / "twelve_status.json"
+    st = read_json(status_path)
     print("Original Twelve collector:")
-    print("  app:", app_dir)
     print("  status:", status_path)
-
-    if not script.exists():
-        print("  ERROR: twelve_live.py not found. Set TMBT_TWELVE_DIR if the old studio moved.")
+    if not st:
+        print("  state: no status file")
         return
-
-    st = current_collector()
-    if st.get("pid_alive") and st.get("running") is not False:
-        print("  already running · PID", st.get("pid"), "· state", st.get("state") or "unknown")
-        return
-
-    py = choose_python(app_dir)
-    env = os.environ.copy()
-    env["TMBT_WORKSPACE"] = str(ws)
-    log_dir = ws / "live_data"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    boot_log = log_dir / "twelve_boot.log"
-
-    kwargs = {
-        "cwd": str(app_dir),
-        "env": env,
-        "stdin": subprocess.DEVNULL,
-        "stdout": open(boot_log, "a", encoding="utf-8", buffering=1),
-        "stderr": subprocess.STDOUT,
-    }
-    if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    else:
-        kwargs["start_new_session"] = True
-
-    try:
-        proc = subprocess.Popen([str(py), str(script), "--run"], **kwargs)
-    except Exception as exc:
-        print("  ERROR starting collector:", exc)
-        return
-
-    print("  started · PID", proc.pid, "· python", py)
-    print("  log:", boot_log)
-
-    # Wait briefly for twelve_live.py to publish its own status. This gives a
-    # useful startup diagnosis without blocking the desk for long.
-    deadline = time.time() + 12
-    last = {}
-    while time.time() < deadline:
-        time.sleep(0.75)
-        last = current_collector()
-        state = str(last.get("state") or "").lower()
-        if last.get("connected") or state in {"polling", "backfill", "error", "quota_pause", "rate_limit_pause"}:
-            break
-
-    if last:
-        print(
-            "  state:", last.get("state") or "unknown",
-            "· connected:", bool(last.get("connected")),
-            "· PID:", last.get("pid") or proc.pid,
-        )
-        if last.get("last_error"):
-            print("  last_error:", str(last.get("last_error"))[:500])
-    else:
-        print("  waiting for collector status update ...")
+    alive = pid_alive(st.get("pid"))
+    print(
+        "  state:", st.get("state") or "unknown",
+        "· connected:", bool(st.get("connected")),
+        "· running PID:", st.get("pid") if alive else "no",
+    )
+    if st.get("last_error"):
+        print("  last_error:", str(st.get("last_error"))[:500])
+    if not alive:
+        print("  note: collector is NOT auto-started by TMBT Next. UI startup must never mutate the market-data pipeline.")
 
 
-start_original_twelve_collector()
+show_collector_status()
 
-# Start the new UI server after the original data writer has been ensured.
+# Start only the UI server. Market-data collectors are deliberately managed
+# separately so a missing credential or old collector cannot corrupt/replace
+# otherwise working NQ/ES feeds when the desk is opened.
 runpy.run_module("server_desk", run_name="__main__")
