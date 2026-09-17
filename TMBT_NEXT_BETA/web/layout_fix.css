@@ -1,0 +1,11 @@
+:root{--bottom:280px}
+.workspace{height:calc(100% - 54px - var(--bottom) - 10px)}
+.splitter-h{height:10px;position:relative;cursor:ns-resize;background:#121d29;border-top:1px solid #25364b;border-bottom:1px solid #25364b;z-index:20}
+.splitter-h:before{content:"";position:absolute;left:50%;top:50%;width:72px;height:3px;transform:translate(-50%,-50%);border-radius:3px;background:#47647f;opacity:.75}
+.splitter-h:hover{background:#1a2b3d}.splitter-h:hover:before{background:#72a9d5;opacity:1}
+.bottom-panel{min-height:36px}
+.bottom-tabs .bottom-resize-btn{min-width:28px;padding:4px 7px;border:1px solid #223247;background:#111a25;color:#9badc2;border-radius:5px}
+.bottom-tabs .bottom-resize-btn:hover{background:#19283a;color:#d4e5f5}
+body.bottom-resizing{cursor:ns-resize!important;user-select:none!important}
+body.bottom-resizing *{cursor:ns-resize!important}
+@media(max-height:850px){:root{--bottom:240px}}
