@@ -67,11 +67,11 @@ def print_collector_status() -> None:
 
 
 print("========================================")
-print("TMBT NEXT · EBP MATRIX READY")
+print("TMBT NEXT · ACTIVE DESK")
 print("========================================")
 print("Workspace:", workspace())
 print_collector_status()
-print("Starting 6-instance EBP matrix: NQ/ES x 15m/30m/1H")
+print("Starting focused live desk + 6-instance EBP matrix: NQ/ES x 15m/30m/1H")
 print("QQQ/SPY proxy feeds remain monitoring-only until true futures data is attached.")
 
-runpy.run_module("server_ready", run_name="__main__")
+runpy.run_module("server_active", run_name="__main__")
