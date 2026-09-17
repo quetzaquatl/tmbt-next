@@ -30,7 +30,7 @@ def _is_ifvg(m):
 def conflict_locked_models():
     """Safety only: never expose simultaneous opposite active iFVGs on one market.
 
-    This is NOT an HTF bias model.  Until the proper price-action HTF rule is
+    This is NOT an HTF bias model. Until the proper price-action HTF rule is
     defined, opposite active iFVG directions on the same market are both blocked
     rather than choosing a direction with an indicator or arbitrary heuristic.
     """
@@ -63,7 +63,7 @@ def conflict_locked_models():
 
 
 core.normalize_models = conflict_locked_models
-core.APP_VERSION = "0.9.16-beta-direction-lock"
+core.APP_VERSION = "0.9.17-beta-visual-desk"
 Handler = ready.Handler
 
 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     core.PID_FILE.write_text(str(core.os.getpid()), encoding="utf-8")
     print("TMBT Next", core.APP_VERSION)
     print("Workspace:", core.WORKSPACE)
-    print("Desk: compact Active Now queue + Background Monitor + notification history")
+    print("Desk: visual-priority live workspace + setup cards + notification history")
     print("Direction safety: opposite active iFVGs on the same market are both BLOCKED")
     print("HTF bias: no EMA / no indicator heuristic; price-action rule still to be defined")
     print("EBP matrix: NQ/ES x 15m/30m/1H · closed-bar evaluator active")
