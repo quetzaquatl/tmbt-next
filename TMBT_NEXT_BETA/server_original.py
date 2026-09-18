@@ -138,7 +138,16 @@ def _load_twelve_file(market="NQ", tf="1H", limit=500):
 
     now = datetime.now(timezone.utc)
     age = (now - latest_received).total_seconds() if latest_received else None
-    stale = age is None or age > 180
+    twelve_status = core.read_json(core.WORKSPACE / "live_data" / "twelve_status.json", {}) or {}
+    try:
+        poll_seconds = max(300, int(twelve_status.get("poll_seconds") or 420))
+    except Exception:
+        poll_seconds = 420
+    # Basic-plan polling is intentionally ~7 minutes to stay inside the daily
+    # call budget. A fixed 3-minute stale threshold made a healthy feed appear
+    # stale between polls.
+    stale_after = max(600, poll_seconds + 180)
+    stale = age is None or age > stale_after
     ticker = payload.get("ticker") or ""
     tickerid = payload.get("tickerid") or ""
     exchange = payload.get("exchange") or ""
@@ -157,8 +166,10 @@ def _load_twelve_file(market="NQ", tf="1H", limit=500):
         "last_received_at_utc": latest_received.isoformat() if latest_received else None,
         "last_bar_utc": datetime.fromtimestamp(latest_bar_ms / 1000.0, tz=timezone.utc).isoformat() if latest_bar_ms else None,
         "age_seconds": age,
+        "stale_after_seconds": stale_after,
+        "collector_state": twelve_status.get("state"),
         "stale": stale,
-        "note": f"twelve · {tickerid or ticker or mkt} · {freshness} · age {_age_text(age)}",
+        "note": f"twelve · {tickerid or ticker or mkt} · {freshness} · age {_age_text(age)} · collector {twelve_status.get('state') or 'unknown'}",
     }
 
 
