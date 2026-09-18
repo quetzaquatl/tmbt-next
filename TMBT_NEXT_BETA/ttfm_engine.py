@@ -170,6 +170,10 @@ def _aggregate(df: pd.DataFrame, tf: str, tz_name: str) -> pd.DataFrame:
         # maintenance hour left empty. Offset keeps Daily closures aligned to
         # the futures session instead of arbitrary midnight calendar bars.
         out = local.resample(rule, label="left", closed="left", offset="18h").agg(agg)
+    elif tf == "4H":
+        # 4H family aligned to the 18:00 ET futures session:
+        # 18:00, 22:00, 02:00, 06:00, 10:00, 14:00.
+        out = local.resample(rule, label="left", closed="left", offset="2h").agg(agg)
     else:
         out = local.resample(rule, label="left", closed="left").agg(agg)
     marker = "tick_count" if "tick_count" in out.columns else "mid_close"
