@@ -205,7 +205,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.26-beta-research-autopilot"
+core.APP_VERSION = "0.9.27-beta-studio-migration"
 
 
 class Handler(ready.Handler):
@@ -225,6 +225,10 @@ class Handler(ready.Handler):
             return self.json(historical_store.status(core.WORKSPACE))
         if u.path == "/api/research-autopilot/status":
             return self.json(research_autopilot_bridge.status())
+        if u.path == "/api/research-autopilot/profiles":
+            return self.json({"profiles": research_autopilot_bridge.profiles()})
+        if u.path == "/api/research-autopilot/report":
+            return self.json(research_autopilot_bridge.latest_report())
         if u.path == "/api/trader-observations":
             try:
                 text = _OBSERVATIONS_FILE.read_text(encoding="utf-8", errors="ignore")
@@ -235,20 +239,30 @@ class Handler(ready.Handler):
 
     def do_POST(self):
         u = urlparse(self.path)
-        if u.path == "/api/research-autopilot/start":
-            return self.json(research_autopilot_bridge.start())
-        if u.path == "/api/research-autopilot/stop":
-            return self.json(research_autopilot_bridge.stop())
-        if u.path != "/api/data-settings":
-            return self.json({"error": "not_found"}, 404)
         try:
             length = int(self.headers.get("Content-Length") or "0")
-            if length <= 0 or length > 65536:
-                return self.json({"error": "invalid_body"}, 400)
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if not isinstance(payload, dict):
-                return self.json({"error": "invalid_json"}, 400)
-            return self.json({"ok": True, "settings": _save_secret_payload(payload)})
+            payload = {}
+            if length:
+                if length > 65536:
+                    return self.json({"error": "invalid_body"}, 400)
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    return self.json({"error": "invalid_json"}, 400)
+
+            if u.path == "/api/research-autopilot/start":
+                profile = str(payload.get("profile") or "NQ_EBP_H1")
+                return self.json(research_autopilot_bridge.start(
+                    profile,
+                    test_news=bool(payload.get("test_news", True)),
+                    tick_audit=bool(payload.get("tick_audit", False)),
+                ))
+            if u.path == "/api/research-autopilot/stop":
+                return self.json(research_autopilot_bridge.stop())
+            if u.path == "/api/data-settings":
+                if not payload:
+                    return self.json({"error": "invalid_body"}, 400)
+                return self.json({"ok": True, "settings": _save_secret_payload(payload)})
+            return self.json({"error": "not_found"}, 404)
         except Exception as exc:
             return self.json({"error": str(exc)}, 500)
 
