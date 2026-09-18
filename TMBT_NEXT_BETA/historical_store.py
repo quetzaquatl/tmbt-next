@@ -121,6 +121,10 @@ def status(workspace: Path | None = None) -> dict[str, Any]:
     value["db"] = str(p)
     value["db_exists"] = p.exists()
     value["db_size_bytes"] = p.stat().st_size if p.exists() else None
+    value["import_complete"] = bool(
+        p.exists() and str(value.get("state") or "").upper() == "COMPLETE"
+    )
+    value["ready_for_research"] = value["import_complete"]
     return value
 
 
