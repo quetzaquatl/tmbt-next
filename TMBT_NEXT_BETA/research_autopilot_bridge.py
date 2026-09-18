@@ -148,6 +148,7 @@ def start(
         "min_dev_trades": requirements["min_dev_trades"],
         "min_val_trades": requirements["min_val_trades"],
         "review_gate_version": "strict-live-v2",
+        "history_split_mode": "full-history-70-15-15-v1",
         # Databento purchase is OHLCV-1m. Do not claim tick-exact validation.
         "tick_audit": bool(tick_audit),
         "requested_at_utc": datetime.now(timezone.utc).isoformat(),
