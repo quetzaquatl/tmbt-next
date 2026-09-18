@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],research:[],researchAutopilot:null,researchSync:null,researchScheduler:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
+const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],outcomeGroups:[],research:[],researchAutopilot:null,researchSync:null,researchScheduler:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
 const RESEARCH_ALERT_KEY="tmbt_next_research_alerts_v1";
 const researchAlertSeen=(()=>{try{const x=JSON.parse(localStorage.getItem(RESEARCH_ALERT_KEY)||"[]");return new Set(Array.isArray(x)?x.slice(-500):[])}catch{return new Set()}})();
 let researchAlertsPrimed=false;
@@ -31,7 +31,7 @@ function setTF(tf){state.tf=tf;$$(".tfbar button").forEach(b=>b.classList.toggle
 function healthFromBoot(d){const ss=d.signal_status||{};dot("#liveDot",ss.running===false?"warn":"ok");const ps=(d.paper||{}).status||{};dot("#paperDot",ps.running?"ok":"warn");const j=(d.research||[])[0];dot("#researchDot",j&&String(j.state).toUpperCase()==="RUNNING"?"ok":"warn")}
 async function bootstrap(){
  try{
-  const d=await api("/api/bootstrap");$("#version").textContent=d.version+" · parallel UI";state.models=d.models||[];state.archive=d.archive||[];state.outcomes=d.outcome_summary||[];state.research=d.research||[];state.paper=d.paper||null;healthFromBoot(d);
+  const d=await api("/api/bootstrap");$("#version").textContent=d.version+" · parallel UI";state.models=d.models||[];state.archive=d.archive||[];state.outcomes=d.outcome_summary||[];state.outcomeGroups=d.outcome_groups||[];state.research=d.research||[];state.paper=d.paper||null;healthFromBoot(d);
   renderModels();renderSignals();renderArchive();renderOutcomes();renderResearch();renderPaperSummary(d.paper);checkResearchAlerts(state.research);
  }catch(e){log("Bootstrap Fehler: "+e);dot("#liveDot","bad")}
 }
@@ -69,7 +69,7 @@ async function refreshArchive(){
  try{const d=await api("/api/archive?limit=500");state.archive=d.rows||[];renderArchive()}catch(e){}
 }
 async function refreshOutcomes(){
- try{const d=await api("/api/outcomes");state.outcomes=d.summary||[];renderOutcomes()}catch(e){}
+ try{const d=await api("/api/outcomes");state.outcomes=d.summary||[];state.outcomeGroups=d.groups||[];renderOutcomes()}catch(e){}
 }
 function researchAlertLabel(j){
  const req=j?.request||{},kind=String(j?.kind||"research").toLowerCase(),preset=req.preset||j?.job_id||"Research";
@@ -119,7 +119,65 @@ function archiveFiltered(){const q=$("#archiveSearch")?.value.toLowerCase()||"",
 function renderArchive(){if(!$("#archiveTable"))return;const arr=archiveFiltered();$("#archiveCount").textContent=`${arr.length} Einträge`;const rows=arr.map(r=>`<tr class="clickable" data-hid="${esc(r.history_id)}" data-sid="${esc(r.snapshot_id||"")}"><td>${r.snapshot_id?"📸":"—"}</td><td>${iso(r.event_time_utc)}</td><td>${esc(r.model)}</td><td>${esc(r.market)}</td><td>${esc(r.tf)}</td><td><span class="pill ${String(r.stage).toLowerCase()}">${esc(r.stage)}</span></td><td>${esc(r.side||"—")}</td><td>${fmt(r.entry,4)}</td><td>${fmt(r.sl,4)}</td><td>${fmt(r.tp,4)}</td><td>${r.outcome?esc(r.outcome):"—"}</td><td class="${Number(r.outcome_r)>0?"good":Number(r.outcome_r)<0?"bad":""}">${r.outcome_r==null?"—":fmt(r.outcome_r,2)+"R"}</td><td class="muted">${esc(r.reason||"")}</td></tr>`).join("");$("#archiveTable").innerHTML=`<table class="table"><thead><tr><th>Snap</th><th>Zeit</th><th>Model</th><th>Mkt</th><th>TF</th><th>Status</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Outcome</th><th>R</th><th>Grund</th></tr></thead><tbody>${rows}</tbody></table>`;$("#archiveTable").querySelectorAll("tr[data-hid]").forEach(r=>r.onclick=()=>openArchive(r.dataset.hid,r.dataset.sid))}
 async function openArchive(hid,sid){const row=state.archive.find(x=>x.history_id===hid);if(!row)return;if(!sid){toast("Für diesen Legacy-Eintrag existiert kein eingefrorener Snapshot.");return}try{const snap=await api(`/api/snapshot?id=${encodeURIComponent(sid)}`);state.snapshot=snap;state.mode="snapshot";state.bars=(snap.bars||[]).map(b=>({t:b.bar_open_ms??b.t,o:Number(b.open??b.o),h:Number(b.high??b.h),l:Number(b.low??b.l),c:Number(b.close??b.c)}));state.offset=0;state.viewCount=Math.min(140,Math.max(40,state.bars.length));state.yZoom=1;state.futureSpace=0;const sm=snap.model||{};state.market=sm.market||row.market||state.market;state.tf=sm.timeframe||row.tf||state.tf;state.selectedModel={id:row.model_id||hid,name:sm.label||row.model,status:sm.stage||row.stage,side:sm.side||row.side,entry:snap.arrays?.entry??row.entry,sl:snap.arrays?.stop??row.sl,tp:snap.arrays?.target??row.tp,rr:snap.arrays?.planned_rr??row.rr,message:sm.message||row.reason,criteria:snap.criteria||row.criteria,logic:snap.logic||row.logic,arrays:snap.arrays||{},validity:snap.validity||{}};$("#snapshotBanner").classList.add("show");$("#snapshotName").textContent=`${state.selectedModel.name} · ${iso(snap.event_time_utc)}`;$("#chartTitle").textContent=`${state.market} · ${state.tf} · Snapshot`;$("#chartSource").textContent=`eingefroren · ${sm.source||row.source||"—"}`;$("#selectedSetup").textContent=state.selectedModel.name;$("#selectedState").textContent=`${state.selectedModel.status} · ${state.selectedModel.side}`;renderInspector(state.selectedModel,snap);$("#chartEmpty").style.display=state.bars.length?"none":"grid";draw();toast("Snapshot geladen")}catch(e){toast("Snapshot konnte nicht geladen werden.");log(String(e))}}
 function backLive(){state.mode="live";state.snapshot=null;$("#snapshotBanner").classList.remove("show");resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
-function renderOutcomes(){const arr=state.outcomes||[];$("#outcomeCards").className="outcome-grid";$("#outcomeCards").innerHTML=arr.length?arr.map(o=>`<div class="outcome-card"><h4>${esc(o.model)}</h4><div class="mini-grid"><div><small>Signals</small><b>${o.signals}</b></div><div><small>Winrate</small><b>${o.winrate==null?"—":fmt(o.winrate,1)+"%"}</b></div><div><small>Net R</small><b class="${o.net_r>0?"good":o.net_r<0?"bad":""}">${fmt(o.net_r,2)}R</b></div><div><small>Expectancy</small><b>${o.expectancy==null?"—":fmt(o.expectancy,2)+"R"}</b></div><div><small>Ø MFE</small><b>${o.avg_mfe==null?"—":fmt(o.avg_mfe,2)+"R"}</b></div><div><small>Ø MAE</small><b>${o.avg_mae==null?"—":fmt(o.avg_mae,2)+"R"}</b></div></div></div>`).join(""):'<div class="empty">Noch keine Outcome-Daten.</div>'}
+function outcomeStatsHtml(s){
+ const x=s||{};
+ return `<div class="outcome-stat-grid">
+  <div><small>Signals</small><b>${x.signals??0}</b></div>
+  <div><small>Winrate</small><b>${x.winrate==null?"—":fmt(x.winrate,1)+"%"}</b></div>
+  <div><small>Net R</small><b class="${Number(x.net_r)>0?"good":Number(x.net_r)<0?"bad":""}">${fmt(x.net_r??0,2)}R</b></div>
+  <div><small>Expectancy</small><b>${x.expectancy==null?"—":fmt(x.expectancy,2)+"R"}</b></div>
+  <div><small>Ø MFE</small><b>${x.avg_mfe==null?"—":fmt(x.avg_mfe,2)+"R"}</b></div>
+  <div><small>Ø MAE</small><b>${x.avg_mae==null?"—":fmt(x.avg_mae,2)+"R"}</b></div>
+ </div>`;
+}
+function outcomeInstanceTable(items){
+ const arr=items||[];
+ if(!arr.length)return'<div class="empty">Keine Modellinstanzen.</div>';
+ return `<table class="table compact outcome-instance-table"><thead><tr><th>Market</th><th>TF</th><th>Model</th><th>Signals</th><th>WR</th><th>Net R</th><th>Exp</th></tr></thead><tbody>${arr.map(i=>{
+  const s=i.stats||{};
+  return `<tr><td><b>${esc(i.market)}</b></td><td><span class="tf-chip">${esc(i.tf)}</span></td><td>${esc(i.model)}</td><td>${s.signals??0}</td><td>${s.winrate==null?"—":fmt(s.winrate,1)+"%"}</td><td class="${Number(s.net_r)>0?"good":Number(s.net_r)<0?"bad":""}">${fmt(s.net_r??0,2)}R</td><td>${s.expectancy==null?"—":fmt(s.expectancy,2)+"R"}</td></tr>`
+ }).join("")}</tbody></table>`;
+}
+function outcomeTradeHtml(t){
+ const l=t.logic_summary||{},criteria=l.criteria||[],logic=l.logic||[];
+ return `<details class="outcome-trade">
+  <summary>
+   <span class="outcome-trade-main"><b>${esc(t.market)} · ${esc(t.tf)}</b><span>${esc(t.model)}</span><small>${iso(t.event_time_utc)} · ${esc(t.side||"—")}</small></span>
+   <span class="outcome-trade-result ${Number(t.outcome_r)>0?"good":Number(t.outcome_r)<0?"bad":""}"><b>${t.outcome_r==null?"—":fmt(t.outcome_r,2)+"R"}</b><small>${esc(t.outcome||"—")}</small></span>
+  </summary>
+  <div class="outcome-trade-body">
+   <div class="outcome-trade-metrics">
+    <div><small>Entry</small><b>${fmt(t.entry,4)}</b></div>
+    <div><small>Stop</small><b>${fmt(t.sl,4)}</b></div>
+    <div><small>Target</small><b>${fmt(t.tp,4)}</b></div>
+    <div><small>Planned RR</small><b>${t.planned_rr==null?"—":fmt(t.planned_rr,2)+"R"}</b></div>
+    <div><small>MFE</small><b>${t.mfe_r==null?"—":fmt(t.mfe_r,2)+"R"}</b></div>
+    <div><small>MAE</small><b>${t.mae_r==null?"—":fmt(t.mae_r,2)+"R"}</b></div>
+   </div>
+   ${l.reason?`<p class="outcome-trade-reason"><b>Setup/Outcome:</b> ${esc(l.reason)}</p>`:""}
+   <div class="outcome-logic-grid">
+    <section><h5>Kriterien beim Trade</h5>${criteria.length?`<ul>${criteria.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:'<p class="muted">Keine eingefrorenen Kriterien verfügbar.</p>'}</section>
+    <section><h5>Gespeicherte Modell-Logik</h5>${logic.length?`<dl>${logic.map(x=>`<div><dt>${esc(x.key)}</dt><dd>${esc(x.value)}</dd></div>`).join("")}</dl>`:'<p class="muted">Keine Logikdetails für diesen historischen Trade gespeichert.</p>'}</section>
+   </div>
+  </div>
+ </details>`;
+}
+function renderOutcomes(){
+ const groups=state.outcomeGroups||[];
+ const host=$("#outcomeCards");if(!host)return;
+ host.className="outcome-groups";
+ if(!groups.length){
+  const arr=state.outcomes||[];
+  host.innerHTML=arr.length?arr.map(o=>`<div class="outcome-card"><h4>${esc(o.model)}</h4>${outcomeStatsHtml(o)}</div>`).join(""):'<div class="empty">Noch keine Outcome-Daten.</div>';
+  return;
+ }
+ host.innerHTML=groups.map(g=>`<article class="outcome-group-card">
+   <div class="outcome-group-head"><div><small>${esc(g.scope||"")}</small><h3>${esc(g.family||g.label)}</h3></div><span class="pill idle">${(g.instances||[]).length} INSTANCES</span></div>
+   ${outcomeStatsHtml(g.stats)}
+   <details class="outcome-section" open><summary><b>Modelle & Timeframes</b><span>alle konfigurierten Instanzen, auch ohne Trades</span></summary>${outcomeInstanceTable(g.instances)}</details>
+   <details class="outcome-section"><summary><b>Vergangene Trades</b><span>${(g.trades||[]).length} Trades · aufklappbar inkl. Logik</span></summary><div class="outcome-trades">${(g.trades||[]).length?(g.trades||[]).map(outcomeTradeHtml).join(""):'<div class="empty">Noch keine abgeschlossenen Trades für diese Gruppe.</div>'}</div></details>
+  </article>`).join("");
+}
 function perfMoney(v){
  if(v===null||v===undefined||v==="")return"—";const n=Number(v);if(!Number.isFinite(n))return"—";
  try{return new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(n)}catch{return n.toFixed(2)+" €"}
