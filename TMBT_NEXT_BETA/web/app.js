@@ -362,6 +362,7 @@ function renderReview(){
    <div class="review-gate-note">Holdout/OOS bleibt gesperrt. Keine automatische Live-Freigabe.</div>
   </article>`
  }).join("")+'</div>';
+ preserveDetailsHTML(host,reviewHtml);
 }
 
 function renderResearch(){
