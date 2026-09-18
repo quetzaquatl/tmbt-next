@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.50-beta-live-worker-guardian"
+core.APP_VERSION = "0.9.51-beta-ote-lifecycle-fix"
 
 
 class Handler(ready.Handler):
