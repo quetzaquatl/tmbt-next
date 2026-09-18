@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.48-beta-full-history-progress"
+core.APP_VERSION = "0.9.49-beta-ttfm-core"
 
 
 class Handler(ready.Handler):
