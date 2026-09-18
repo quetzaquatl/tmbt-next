@@ -261,3 +261,11 @@ body.workspace-page-open .workspace-pages{display:block}
  .outcome-trade-metrics{grid-template-columns:repeat(3,1fr)}
  .outcome-logic-grid{grid-template-columns:1fr}
 }
+
+
+/* v0.9.46 — historical trade chart replay */
+.outcome-chart-actions{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 9px}
+.outcome-chart-actions button{border:1px solid #31506d;background:#102033;color:#b9d6ef;border-radius:7px;padding:6px 9px;font-size:8px;cursor:pointer}
+.outcome-chart-actions button:hover{background:#17304a;border-color:#4e789e;color:#e2f1ff}
+.snapshot-banner #backOutcome{margin-left:auto}
+.snapshot-banner #backLive{margin-left:4px}
