@@ -857,6 +857,7 @@ def run_profile(profile: str, cfg: dict[str, Any], state: dict[str, Any]) -> dic
         matrix_total=int(cfg.get("_matrix_total") or 0),
         profile_started_at_utc=started.isoformat(),
         last_profile_finished_at_utc=None,
+        last_error="",
     )
     result = research_autopilot_bridge.start(
         profile,
@@ -967,6 +968,13 @@ def daemon() -> None:
                 continue
 
             profiles = [p for p in cfg.get("profiles") or [] if p in available]
+            _status(
+                pid=os.getpid(),
+                running=True,
+                available_profile_count=len(available),
+                configured_profile_count=len(cfg.get("profiles") or []),
+                last_error="",
+            )
             ran = False
             completed_profiles = []
             for matrix_index, profile in enumerate(profiles, 1):
