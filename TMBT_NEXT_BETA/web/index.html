@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TMBT Next</title><link rel="stylesheet" href="styles.css?v=0945"><link rel="stylesheet" href="compat.css?v=0923"><link rel="stylesheet" href="layout_fix.css?v=0944"><link rel="stylesheet" href="active_desk.css"><link rel="stylesheet" href="notification_center.css"><link rel="stylesheet" href="visual_refresh.css?v=0923">
+<title>TMBT Next</title><link rel="stylesheet" href="styles.css?v=0946"><link rel="stylesheet" href="compat.css?v=0923"><link rel="stylesheet" href="layout_fix.css?v=0944"><link rel="stylesheet" href="active_desk.css"><link rel="stylesheet" href="notification_center.css"><link rel="stylesheet" href="visual_refresh.css?v=0923">
 </head>
 <body>
 <div id="app">
@@ -62,7 +62,7 @@
     <div class="chart-host" id="chartHost">
       <canvas id="chart"></canvas>
       <div class="chart-legend"><span id="ohlcText">O — H — L — C —</span><span id="cursorTime"></span></div>
-      <div class="snapshot-banner" id="snapshotBanner"><b>FROZEN SNAPSHOT</b><span id="snapshotName"></span><button id="backLive">Zurück zu Live</button></div>
+      <div class="snapshot-banner" id="snapshotBanner"><b id="snapshotModeLabel">FROZEN SNAPSHOT</b><span id="snapshotName"></span><button id="backOutcome" style="display:none">← Outcomes</button><button id="backLive">Zurück zu Live</button></div>
       <div class="chart-empty" id="chartEmpty">Lade Bars…</div>
     </div>
     <div class="pd-strip">
@@ -146,7 +146,7 @@
   <div id="notificationFoot" class="notif-foot"></div>
 </aside>
 <div id="toast"></div>
-<script src="app.js?v=0945"></script>
+<script src="app.js?v=0946"></script>
 <script src="original_compat.js?v=0923"></script>
 <script src="desk_patch.js"></script>
 <script src="layout_fix.js?v=0944"></script>
