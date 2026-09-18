@@ -218,3 +218,46 @@ body.workspace-page-open .workspace-pages{display:block}
  .gate-grid{grid-template-columns:1fr 1fr}
  .opt-effect{grid-template-columns:1fr 1fr}
 }
+
+
+/* v0.9.45 — grouped Outcomes with timeframe matrix + trade logic */
+.outcome-groups{display:grid;grid-template-columns:1fr;gap:12px;max-width:1600px;margin:0 auto}
+.outcome-group-card{background:#101925;border:1px solid #263b52;border-radius:11px;padding:14px 15px}
+.outcome-group-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1px solid #213147}
+.outcome-group-head small{display:block;color:#72869d;font-size:8px;text-transform:uppercase;letter-spacing:.12em}
+.outcome-group-head h3{margin:3px 0 0;font-size:15px;color:#dce9f6}
+.outcome-stat-grid{display:grid;grid-template-columns:repeat(6,minmax(100px,1fr));gap:7px;margin:11px 0}
+.outcome-stat-grid>div{padding:9px 10px;border:1px solid #203248;border-radius:8px;background:#0c151f}
+.outcome-stat-grid small{display:block;color:#74899f;font-size:8px}
+.outcome-stat-grid b{display:block;margin-top:3px;font-size:12px;font-variant-numeric:tabular-nums}
+.outcome-section{margin-top:9px;border:1px solid #203247;border-radius:9px;background:#0b141e;overflow:hidden}
+.outcome-section>summary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;padding:9px 11px;background:#101b28;color:#d8e6f4}
+.outcome-section>summary b{font-size:10px}.outcome-section>summary span{font-size:8px;color:#788ca3}
+.outcome-instance-table{margin:0!important;border:0!important;min-width:720px!important}
+.outcome-instance-table td,.outcome-instance-table th{padding:7px 9px!important}
+.tf-chip{display:inline-flex;align-items:center;justify-content:center;min-width:34px;padding:3px 6px;border:1px solid #315273;border-radius:999px;background:#101e2b;color:#90c7f4;font-size:8px;font-weight:800}
+.outcome-trades{display:grid;gap:6px;padding:8px}
+.outcome-trade{border:1px solid #1f3145;border-radius:8px;background:#0b141e;overflow:hidden}
+.outcome-trade>summary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:#0e1823}
+.outcome-trade-main{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center;min-width:0}
+.outcome-trade-main b{font-size:9px;color:#d8e8f6}.outcome-trade-main span{font-size:9px;color:#9db0c4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.outcome-trade-main small{grid-column:1/-1;color:#71859b;font-size:8px}
+.outcome-trade-result{text-align:right;flex:0 0 auto}.outcome-trade-result b{display:block;font-size:11px}.outcome-trade-result small{display:block;color:#74889f;font-size:8px}
+.outcome-trade-body{padding:10px}
+.outcome-trade-metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:9px}
+.outcome-trade-metrics>div{padding:7px 8px;border:1px solid #1f3043;border-radius:7px;background:#09121b}
+.outcome-trade-metrics small{display:block;color:#71869d;font-size:8px}.outcome-trade-metrics b{display:block;margin-top:3px;font-size:9px}
+.outcome-trade-reason{margin:0 0 9px;padding:8px 9px;border-left:2px solid #3c668b;background:#0e1925;color:#9eb0c3;font-size:9px}
+.outcome-logic-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.outcome-logic-grid section{border:1px solid #1f3043;border-radius:8px;background:#09121b;padding:9px}
+.outcome-logic-grid h5{margin:0 0 7px;font-size:9px;color:#cfdeed}
+.outcome-logic-grid ul{margin:0;padding-left:17px;color:#9aaec2;font-size:8px}
+.outcome-logic-grid li{margin:4px 0}
+.outcome-logic-grid dl{margin:0;display:grid;gap:5px}
+.outcome-logic-grid dl>div{display:grid;grid-template-columns:minmax(110px,.65fr) 1fr;gap:8px;padding-bottom:4px;border-bottom:1px solid #162538}
+.outcome-logic-grid dt{color:#7f96ad;font-size:8px}.outcome-logic-grid dd{margin:0;color:#b7c6d5;font-size:8px;word-break:break-word}
+@media(max-width:1100px){
+ .outcome-stat-grid{grid-template-columns:repeat(3,1fr)}
+ .outcome-trade-metrics{grid-template-columns:repeat(3,1fr)}
+ .outcome-logic-grid{grid-template-columns:1fr}
+}
