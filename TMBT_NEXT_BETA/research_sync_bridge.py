@@ -28,6 +28,16 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _parse_dt(value: Any):
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -119,13 +129,33 @@ def status() -> dict[str, Any]:
     st = _read_json(STATUS)
     repo = Path(str(cfg.get("repo_dir") or DEFAULT_REPO)).expanduser().resolve()
     pid = int(st.get("pid") or 0)
+    alive = bool(st.get("running") and _pid_alive(pid))
     heartbeat = {}
     try:
         heartbeat = _read_json(repo / "state" / "heartbeat.json")
     except Exception:
         pass
+
+    last_sync = _parse_dt(st.get("last_sync_utc"))
+    sync_age = None
+    if last_sync is not None:
+        sync_age = max(0.0, (datetime.now(timezone.utc) - last_sync).total_seconds())
+    poll_seconds = max(10, int(cfg.get("poll_seconds") or 30))
+    healthy_limit = max(180, poll_seconds * 5)
+    state = str(st.get("state") or "")
+    healthy = bool(
+        alive
+        and state not in {"error", "disabled", "stopped"}
+        and sync_age is not None
+        and sync_age <= healthy_limit
+        and (repo / ".git").exists()
+    )
+
     st.update({
-        "running": bool(st.get("running") and _pid_alive(pid)),
+        "running": alive,
+        "healthy": healthy,
+        "sync_age_seconds": sync_age,
+        "healthy_limit_seconds": healthy_limit,
         "pid": pid or None,
         "enabled": bool(cfg.get("enabled")),
         "repo_dir": str(repo),
@@ -145,7 +175,7 @@ def status() -> dict[str, Any]:
 def start() -> dict[str, Any]:
     cfg = ensure_config()
     st = status()
-    if st.get("running") and st.get("worker_generation") != WORKER_GENERATION:
+    if st.get("running") and (st.get("worker_generation") != WORKER_GENERATION or not st.get("healthy")):
         # A TMBT update can change how the detached sync worker launches Git.
         # Recycle an already-running pre-update daemon once so it loads the new
         # no-console implementation instead of keeping old code in memory.
@@ -165,7 +195,15 @@ def start() -> dict[str, Any]:
         except Exception:
             pass
         base = _read_json(STATUS)
-        base.update({"running": False, "state": "restarting_after_update"})
+        base.update({
+            "running": False,
+            "state": "restarting_unhealthy_or_after_update",
+            "restart_reason": (
+                "worker_generation_changed"
+                if st.get("worker_generation") != WORKER_GENERATION
+                else "sync_health_stale"
+            ),
+        })
         _write_json(STATUS, base)
         st = status()
     if st.get("running"):
