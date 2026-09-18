@@ -74,6 +74,9 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     },
 }
 
+_TRADING_DAY_CACHE: dict[tuple[str, str, str], pd.DataFrame] = {}
+_TRADING_DAY_CACHE_MAX = 24
+
 _TF_MINUTES = {
     "1m": 1,
     "5m": 5,
@@ -184,6 +187,10 @@ def _load_trading_day(bt_core, file_index, cache_root: Path, market: str, d: dat
     previous calendar day 18:00 ET -> current calendar day 18:00 ET.
     The 17:00-18:00 ET maintenance gap simply contains no bars.
     """
+    cache_key = (str(market), d.isoformat(), str(tz_name))
+    cached = _TRADING_DAY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     tz = ZoneInfo(tz_name)
     start_local = pd.Timestamp(datetime.combine(d - timedelta(days=1), time(18, 0), tzinfo=tz))
     end_local = pd.Timestamp(datetime.combine(d, time(18, 0), tzinfo=tz))
@@ -195,7 +202,11 @@ def _load_trading_day(bt_core, file_index, cache_root: Path, market: str, d: dat
     if not pieces:
         return pd.DataFrame()
     x = pd.concat(pieces).sort_index()
-    return x[(x.index >= start_local.tz_convert("UTC")) & (x.index < end_local.tz_convert("UTC"))].copy()
+    out = x[(x.index >= start_local.tz_convert("UTC")) & (x.index < end_local.tz_convert("UTC"))].copy()
+    _TRADING_DAY_CACHE[cache_key] = out
+    while len(_TRADING_DAY_CACHE) > _TRADING_DAY_CACHE_MAX:
+        _TRADING_DAY_CACHE.pop(next(iter(_TRADING_DAY_CACHE)))
+    return out
 
 
 def _previous_trading_days(bt_core, file_index, cache_root: Path, market: str, d: date, tz_name: str, count: int = 8) -> list[pd.DataFrame]:
