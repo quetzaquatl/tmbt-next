@@ -188,6 +188,42 @@ function performanceDetail(perf,label="Validation",open=true){
   <details class="perf-monthly"><summary>Monatliche Performance</summary><table class="table compact"><thead><tr><th>Monat</th><th>Trades</th><th>Net</th><th>WR</th><th>Exp</th></tr></thead><tbody>${perfTableRows(perf.monthly,"month")}</tbody></table></details>
  </details>`;
 }
+function optimizationHistory(a){
+ const steps=a?.optimization_steps||[];
+ if(!steps.length)return'<div class="empty">Noch kein Optimierungsverlauf gespeichert.</div>';
+ return`<div class="optimization-history">${steps.map((s,i)=>{
+  const d=s.deltas||{},before=s.before||{},after=s.after||{},changes=s.changes||[];
+  const ch=changes.length?changes.map(x=>`<span class="opt-change"><b>${esc(x.parameter)}</b> ${esc(x.before==null?"—":x.before)} → ${esc(x.after)}</span>`).join(""):'<span class="muted">keine Parameteränderung</span>';
+  const effectClass=(Number(d.expectancy_r)>=0&&Number(d.profit_factor_r)>=0)?"good":((Number(d.expectancy_r)<0&&Number(d.profit_factor_r)<0)?"bad":"");
+  return`<article class="optimization-step">
+    <div class="optimization-step-head"><div><small>Lauf ${i+1}</small><b>${esc(s.name||s.stage||"Optimizer")}</b></div><span>${s.tested_combinations??0} Kombinationen</span></div>
+    <div class="opt-changes">${ch}</div>
+    <div class="opt-effect ${effectClass}">
+      <span>Expectancy <b>${perfNum(before.expectancy_r,3)} → ${perfNum(after.expectancy_r,3)}R</b> <em>${Number(d.expectancy_r)>=0?"+":""}${perfNum(d.expectancy_r,3)}</em></span>
+      <span>PF <b>${perfNum(before.profit_factor_r,2)} → ${perfNum(after.profit_factor_r,2)}</b> <em>${Number(d.profit_factor_r)>=0?"+":""}${perfNum(d.profit_factor_r,3)}</em></span>
+      <span>DD <b>${perfNum(before.max_drawdown_r,1)} → ${perfNum(after.max_drawdown_r,1)}R</b> <em>${Number(d.max_drawdown_r)>=0?"+":""}${perfNum(d.max_drawdown_r,1)}R</em></span>
+      <span>Net <b>${perfNum(before.net_r,1)} → ${perfNum(after.net_r,1)}R</b> <em>${Number(d.net_r)>=0?"+":""}${perfNum(d.net_r,1)}R</em></span>
+    </div>
+    <p class="opt-reason"><b>Warum:</b> ${esc(s.reason||"—")}</p>
+  </article>`
+ }).join("")}</div>`;
+}
+function validationGateHtml(a){
+ const v=a?.validation||{},g=v.gates||{},keys=Object.keys(g);
+ if(!keys.length)return"";
+ const label=k=>({
+  development_expectancy_ge_0_10R:"Development Expectancy ≥ 0.10R",
+  development_profit_factor_ge_1_20:"Development PF ≥ 1.20",
+  validation_expectancy_ge_0_08R:"Validation Expectancy ≥ 0.08R",
+  validation_profit_factor_ge_1_20:"Validation PF ≥ 1.20",
+  validation_min_trades:`Validation Trades ≥ ${v.min_val_trades??"—"}`,
+  validation_net_r_ge_10:"Validation Net ≥ 10R",
+  expectancy_retention_ge_50pct:"Expectancy Retention ≥ 50%",
+  validation_recovery_factor_ge_1_50:"Recovery Factor ≥ 1.50",
+  validation_max_drawdown_le_25R:"Validation DD ≤ 25R"
+ }[k]||k);
+ return`<div class="validation-gates"><div class="model-row"><h4>Live-Review Gate</h4><span class="pill ${String(v.verdict||"fail").toLowerCase()}">${esc(v.verdict||"—")} · ${v.passed_gates??0}/${v.total_gates??keys.length}</span></div><div class="gate-grid">${keys.map(k=>`<div class="${g[k]?"pass":"fail"}"><b>${g[k]?"✓":"✕"}</b><span>${esc(label(k))}</span></div>`).join("")}</div><small>Positiver Net Profit allein reicht ausdrücklich nicht. Alle Gates müssen für PASS erfüllt sein.</small></div>`;
+}
 function renderReview(){
  const host=$("#reviewView");if(!host)return;
  const rs=state.researchScheduler||{},profiles=Object.values(rs.profiles||{});
@@ -203,7 +239,9 @@ function renderReview(){
     <div><small>Profit Factor</small><b>${fmt(val.profit_factor_r,2)}</b></div>
     <div><small>Max DD</small><b>${val.max_drawdown_r==null?"—":fmt(val.max_drawdown_r,1)+"R"}</b></div>
    </div>
+   ${validationGateHtml(a)}
    ${performanceDetail(perf.validation,"Validation",true)}
+   <details class="optimization-report" open><summary><b>Optimierungsverlauf</b><span>${(a.optimization_steps||[]).length} Schritte</span></summary>${optimizationHistory(a)}</details>
    ${performanceDetail(perf.development,"Optimiertes Development",false)}
    ${performanceDetail(perf.baseline,"Development Baseline",false)}
    <div class="review-columns">
@@ -236,7 +274,7 @@ function renderResearch(){
  const reportHtml=p=>{
   const x=p?.last_analysis||{},dev=x.development_summary||{},val=x.validation_summary||{},good=x.good||[],bad=x.bad||[],next=x.next_steps||[],ov=x.selected_overrides||{},perf=x.performance||{};
   if(!x.profile)return"";
-  return`<details class="research-card"><summary><b>Bericht · ${esc(x.label||x.profile)}</b> <span class="pill ${String(x.verdict||"idle").toLowerCase()}">${esc(x.verdict||"—")}</span></summary><div class="model-row"><small>Development: Trades ${dev.trades??"—"} · Exp ${fmt(dev.expectancy_r,3)}R · PF ${fmt(dev.profit_factor_r,2)} · DD ${fmt(dev.max_drawdown_r,1)}R</small><small>Validation: Trades ${val.trades??"—"} · Exp ${fmt(val.expectancy_r,3)}R · PF ${fmt(val.profit_factor_r,2)} · DD ${fmt(val.max_drawdown_r,1)}R</small></div>${performanceDetail(perf.validation,"Validation",false)}<h4>Gut</h4><ul>${good.map(v=>`<li class="good">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Schlecht / Risiken</h4><ul>${bad.map(v=>`<li class="bad">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Nächster Schritt</h4><ul>${next.map(v=>`<li>${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><details><summary>Gewählte Parameter</summary><pre>${esc(JSON.stringify(ov,null,2))}</pre></details></details>`;
+  return`<details class="research-card"><summary><b>Bericht · ${esc(x.label||x.profile)}</b> <span class="pill ${String(x.verdict||"idle").toLowerCase()}">${esc(x.verdict||"—")}</span></summary><div class="model-row"><small>Development: Trades ${dev.trades??"—"} · Exp ${fmt(dev.expectancy_r,3)}R · PF ${fmt(dev.profit_factor_r,2)} · DD ${fmt(dev.max_drawdown_r,1)}R</small><small>Validation: Trades ${val.trades??"—"} · Exp ${fmt(val.expectancy_r,3)}R · PF ${fmt(val.profit_factor_r,2)} · DD ${fmt(val.max_drawdown_r,1)}R</small></div>${validationGateHtml(x)}${performanceDetail(perf.validation,"Validation",false)}<details class="optimization-report"><summary><b>Optimierungsverlauf</b><span>${(x.optimization_steps||[]).length} Schritte</span></summary>${optimizationHistory(x)}</details><h4>Gut</h4><ul>${good.map(v=>`<li class="good">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Schlecht / Risiken</h4><ul>${bad.map(v=>`<li class="bad">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Nächster Schritt</h4><ul>${next.map(v=>`<li>${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><details><summary>Gewählte Parameter</summary><pre>${esc(JSON.stringify(ov,null,2))}</pre></details></details>`;
  };
  const rp=rs.profiles||{};
  const reports=Object.values(rp).filter(p=>p?.last_analysis?.profile).map(reportHtml).join("");
