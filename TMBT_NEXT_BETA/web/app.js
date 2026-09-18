@@ -34,10 +34,11 @@ async function pollResearch(){
 
 async function researchAutopilotAction(action){
  try{
-  const r=await fetch("/api/research-autopilot/"+action,{method:"POST"});
+  const profile=$("#researchAutopilotProfile")?.value||"NQ_EBP_H1";
+  const r=await fetch("/api/research-autopilot/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(action==="start"?{profile,test_news:true,tick_audit:false}:{})});
   const d=await r.json();
   if(!r.ok)throw Error(d.error||String(r.status));
-  toast(action==="start"?(d.started===false&&d.reason==="already_running"?"Research Autopilot läuft bereits.":"Research Autopilot gestartet."):"Research Autopilot gestoppt.");
+  toast(action==="start"?(d.started===false&&d.reason==="already_running"?"Research Autopilot läuft bereits.":"Research Autopilot gestartet: "+profile):"Research Autopilot Abbruch angefordert.");
   setTimeout(pollResearch,500);
  }catch(e){toast("Research Autopilot: "+String(e))}
 }
@@ -74,9 +75,10 @@ async function openArchive(hid,sid){const row=state.archive.find(x=>x.history_id
 function backLive(){state.mode="live";state.snapshot=null;$("#snapshotBanner").classList.remove("show");resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
 function renderOutcomes(){const arr=state.outcomes||[];$("#outcomeCards").className="outcome-grid";$("#outcomeCards").innerHTML=arr.length?arr.map(o=>`<div class="outcome-card"><h4>${esc(o.model)}</h4><div class="mini-grid"><div><small>Signals</small><b>${o.signals}</b></div><div><small>Winrate</small><b>${o.winrate==null?"—":fmt(o.winrate,1)+"%"}</b></div><div><small>Net R</small><b class="${o.net_r>0?"good":o.net_r<0?"bad":""}">${fmt(o.net_r,2)}R</b></div><div><small>Expectancy</small><b>${o.expectancy==null?"—":fmt(o.expectancy,2)+"R"}</b></div><div><small>Ø MFE</small><b>${o.avg_mfe==null?"—":fmt(o.avg_mfe,2)+"R"}</b></div><div><small>Ø MAE</small><b>${o.avg_mae==null?"—":fmt(o.avg_mae,2)+"R"}</b></div></div></div>`).join(""):'<div class="empty">Noch keine Outcome-Daten.</div>'}
 function renderResearch(){
- const arr=state.research||[],a=state.researchAutopilot||{};
+ const arr=state.research||[],a=state.researchAutopilot||{},profiles=a.available_profiles||{};
  const jobs=arr.length?arr.map(j=>{const p=j.progress||{},pct=Number(p.pct||0);return`<div class="research-card"><div class="model-row"><h4>${esc(j.request?.preset||j.kind||j.job_id)}</h4><span class="pill ${String(j.state).toLowerCase()}">${esc(j.state)}</span></div><div class="progress"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div><div class="model-row"><small>${pct.toFixed(1)}% · ${esc(p.date||"")} · Trades ${p.trades??"—"}</small><small>${esc(j.job_id||"")}</small></div>${j.error?`<p class="bad">${esc(j.error)}</p>`:""}</div>`}).join(""):'<div class="empty">Keine Research-Jobs gefunden.</div>';
- const auto=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>Research Autopilot</h4><small>Legacy Backtest-/Optimierungs-Worker</small></div><span class="pill ${a.running?"signal":"idle"}">${a.running?"RUNNING":"STOPPED"}</span></div><div class="model-row"><small>${a.running?"PID "+esc((a.pids||[]).join(", ")):"Worker nicht aktiv"} · ${esc(a.script||"")}</small><span><button id="researchAutopilotStart" ${a.running?"disabled":""}>Start</button> <button id="researchAutopilotStop" class="ghost" ${a.running?"":"disabled"}>Stop</button></span></div>${a.legacy_status?.output?`<details><summary>Statusdetails</summary><pre>${esc(a.legacy_status.output)}</pre></details>`:""}</div>`;
+ const opts=Object.entries(profiles).filter(([k])=>k!=="_error").map(([k,v])=>`<option value="${esc(k)}" ${String(a.profile||"")==k?"selected":""}>${esc(v.label||k)}</option>`).join("");
+ const auto=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>Research Autopilot</h4><small>TMBT Next · Backtest + Optimizer · Observations ausgeschlossen</small></div><span class="pill ${a.running?"signal":"idle"}">${a.running?"RUNNING":"STOPPED"}</span></div><div class="model-row"><select id="researchAutopilotProfile" ${a.running?"disabled":""}>${opts}</select><span><button id="researchAutopilotStart" ${a.running||!opts?"disabled":""}>Start</button> <button id="researchAutopilotStop" class="ghost" ${a.running?"":"disabled"}>Stop</button></span></div><div class="model-row"><small>${a.running?"PID "+esc(a.pid||"—")+" · "+esc(a.profile||""):"Worker nicht aktiv"} · 1m Databento Futures laufen bar-konservativ</small><small>${esc(a.runtime?.runtime||"")}</small></div>${a.last_error?`<p class="bad">${esc(a.last_error)}</p>`:""}</div>`;
  const notes=state.traderNotes?`<details class="research-card trader-notes"><summary><b>Trader Thinking / Observations</b> <small>nur Notizen · keine Regeln</small></summary><pre>${esc(state.traderNotes)}</pre></details>`:"";
  $("#researchList").innerHTML=auto+notes+jobs;
  $("#researchAutopilotStart")?.addEventListener("click",()=>researchAutopilotAction("start"));
