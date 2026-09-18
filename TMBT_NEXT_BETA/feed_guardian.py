@@ -161,8 +161,14 @@ def _score_candidate(path: Path) -> int:
 
 
 def discover_twelve_launcher() -> Path | None:
-    # Prefer the self-contained migration runtime. Once the audit bundle exists,
-    # TMBT Next no longer needs the old Studio directory to run Twelve.
+    # Prefer the native TMBT fast warm-start collector. It reuses the migrated
+    # Twelve helpers but avoids a full multi-timeframe REST backfill on every
+    # restart once local mirrors already exist.
+    fast = HERE / "twelve_fast_collector.py"
+    if fast.exists():
+        return fast.resolve()
+
+    # Fallback to the self-contained migration runtime.
     try:
         native = legacy_runtime.script("twelve_live.py")
         if native.exists():
