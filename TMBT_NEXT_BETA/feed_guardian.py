@@ -1,0 +1,320 @@
+from __future__ import annotations
+
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\\Projekt model\\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
+HERE = Path(__file__).resolve().parent
+STATUS = WORKSPACE / "live_data" / "tmbt_feed_guardian_status.json"
+TWELVE_STATUS = WORKSPACE / "live_data" / "twelve_status.json"
+PID_FILE = HERE / "feed_guardian.pid"
+MASSIVE_PID = HERE / "massive_futures.pid"
+CHECK_SECONDS = max(15, int(os.environ.get("TMBT_FEED_GUARDIAN_SECONDS", "30")))
+RESTART_COOLDOWN = max(60, int(os.environ.get("TMBT_FEED_RESTART_COOLDOWN", "120")))
+DISCONNECTED_GRACE = max(60, int(os.environ.get("TMBT_FEED_DISCONNECTED_GRACE", "180")))
+
+_last_twelve_start = 0.0
+_last_massive_start = 0.0
+_disconnected_since: float | None = None
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def write_status(**kwargs) -> None:
+    cur = read_json(STATUS)
+    cur.update(kwargs)
+    cur["updated_at_utc"] = now_iso()
+    write_json(STATUS, cur)
+
+
+def pid_alive(pid: Any) -> bool:
+    try:
+        pid = int(pid)
+    except Exception:
+        return False
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            r = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=4,
+            )
+            return str(pid).encode("ascii") in (r.stdout or b"")
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        return False
+
+
+def prevent_duplicate() -> None:
+    try:
+        old = int(PID_FILE.read_text(encoding="utf-8").strip())
+    except Exception:
+        old = 0
+    if old and old != os.getpid() and pid_alive(old):
+        raise SystemExit(f"feed guardian already running as PID {old}")
+    PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+
+
+def _candidate_from_status(st: dict[str, Any]) -> Path | None:
+    for key in ("script", "path", "launcher", "collector", "collector_path"):
+        raw = st.get(key)
+        if not raw:
+            continue
+        try:
+            p = Path(str(raw).strip('"')).expanduser()
+            if p.exists() and p.is_file():
+                return p.resolve()
+        except Exception:
+            pass
+    return None
+
+
+def _score_candidate(path: Path) -> int:
+    name = path.name.lower()
+    score = 0
+    if "twelve" in name:
+        score += 8
+    if any(x in name for x in ("collector", "writer", "live", "sync", "stream")):
+        score += 4
+    if name.startswith(("start", "run")):
+        score += 2
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")[:120000].lower()
+    except Exception:
+        text = ""
+    if "twelve_status.json" in text:
+        score += 12
+    if "live_data" in text and "twelve" in text:
+        score += 8
+    if "api.twelvedata.com" in text or "twelvedata" in text:
+        score += 5
+    if "tmbt_feed_guardian" in text:
+        score -= 50
+    return score
+
+
+def discover_twelve_launcher() -> Path | None:
+    explicit = os.environ.get("TMBT_TWELVE_COLLECTOR_PATH", "").strip().strip('"')
+    if explicit:
+        p = Path(explicit)
+        if p.exists() and p.is_file():
+            return p.resolve()
+
+    st = read_json(TWELVE_STATUS)
+    from_status = _candidate_from_status(st)
+    if from_status:
+        return from_status
+
+    patterns = (
+        "*twelve*collector*.py", "*twelve*writer*.py", "*twelve*live*.py", "*twelve*sync*.py",
+        "*Twelve*Collector*.py", "*Twelve*Writer*.py", "*Twelve*Live*.py",
+        "*twelve*.bat", "*Twelve*.bat", "*twelve*.cmd", "*Twelve*.cmd", "*twelve*.ps1", "*Twelve*.ps1",
+    )
+    found: dict[Path, int] = {}
+    for pat in patterns:
+        try:
+            for p in WORKSPACE.rglob(pat):
+                if not p.is_file():
+                    continue
+                # Never recurse into this repo's own helper scripts as a collector candidate.
+                if HERE in p.resolve().parents:
+                    continue
+                s = _score_candidate(p)
+                if s > 0:
+                    found[p.resolve()] = max(found.get(p.resolve(), -999), s)
+        except Exception:
+            continue
+    if not found:
+        return None
+    return max(found.items(), key=lambda kv: kv[1])[0]
+
+
+def _spawn_file(path: Path) -> subprocess.Popen:
+    ext = path.suffix.lower()
+    env = os.environ.copy()
+    env["TMBT_WORKSPACE"] = str(WORKSPACE)
+    flags = 0
+    if os.name == "nt":
+        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    if ext in {".bat", ".cmd"}:
+        cmd = ["cmd.exe", "/c", str(path)]
+    elif ext == ".ps1":
+        cmd = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(path)]
+    elif ext == ".py":
+        cmd = [sys.executable, str(path)]
+    else:
+        raise RuntimeError(f"unsupported collector launcher: {path}")
+    return subprocess.Popen(
+        cmd,
+        cwd=str(path.parent),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=flags,
+    )
+
+
+def start_twelve_collector(reason: str) -> dict[str, Any]:
+    global _last_twelve_start
+    now = time.time()
+    if now - _last_twelve_start < RESTART_COOLDOWN:
+        return {"started": False, "reason": "cooldown"}
+    _last_twelve_start = now
+
+    explicit_cmd = os.environ.get("TMBT_TWELVE_COLLECTOR_CMD", "").strip()
+    try:
+        if explicit_cmd:
+            env = os.environ.copy()
+            env["TMBT_WORKSPACE"] = str(WORKSPACE)
+            flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+            p = subprocess.Popen(
+                explicit_cmd,
+                cwd=str(WORKSPACE),
+                env=env,
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags,
+            )
+            return {"started": True, "pid": p.pid, "launcher": "TMBT_TWELVE_COLLECTOR_CMD", "reason": reason}
+
+        launcher = discover_twelve_launcher()
+        if not launcher:
+            return {
+                "started": False,
+                "reason": "collector launcher not found",
+                "hint": "Set TMBT_TWELVE_COLLECTOR_PATH once to the Old Studio Twelve collector/launcher.",
+            }
+        p = _spawn_file(launcher)
+        return {"started": True, "pid": p.pid, "launcher": str(launcher), "reason": reason}
+    except Exception as exc:
+        return {"started": False, "reason": f"start failed: {exc}"}
+
+
+def ensure_twelve() -> dict[str, Any]:
+    global _disconnected_since
+    st = read_json(TWELVE_STATUS)
+    alive = pid_alive(st.get("pid"))
+    connected = bool(st.get("connected"))
+    state = str(st.get("state") or "unknown")
+
+    if alive and connected:
+        _disconnected_since = None
+        return {"ok": True, "alive": True, "connected": True, "state": state, "pid": st.get("pid")}
+
+    if alive and not connected:
+        if _disconnected_since is None:
+            _disconnected_since = time.time()
+        age = time.time() - _disconnected_since
+        if age < DISCONNECTED_GRACE:
+            return {
+                "ok": False, "alive": True, "connected": False, "state": state,
+                "pid": st.get("pid"), "waiting_seconds": int(DISCONNECTED_GRACE - age),
+                "last_error": st.get("last_error"),
+            }
+        # A live but disconnected collector may be wedged. Kill only the PID published
+        # by its own status file, then start the same collector again.
+        if os.name == "nt":
+            try:
+                subprocess.run(["taskkill", "/PID", str(int(st.get("pid"))), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                time.sleep(1)
+            except Exception:
+                pass
+        _disconnected_since = None
+        launch = start_twelve_collector("published collector disconnected beyond grace")
+        return {"ok": False, "alive": False, "connected": False, "state": state, "restart": launch}
+
+    _disconnected_since = None
+    launch = start_twelve_collector("collector missing or dead")
+    return {"ok": False, "alive": False, "connected": False, "state": state, "restart": launch}
+
+
+def ensure_massive() -> dict[str, Any]:
+    global _last_massive_start
+    api_key = os.environ.get("MASSIVE_API_KEY", "").strip()
+    if not api_key:
+        return {"enabled": False, "reason": "MASSIVE_API_KEY not set"}
+    try:
+        pid = int(MASSIVE_PID.read_text(encoding="utf-8").strip())
+    except Exception:
+        pid = 0
+    if pid and pid_alive(pid):
+        return {"enabled": True, "running": True, "pid": pid}
+    if time.time() - _last_massive_start < RESTART_COOLDOWN:
+        return {"enabled": True, "running": False, "reason": "cooldown"}
+    _last_massive_start = time.time()
+    script = HERE / "massive_futures_bridge.py"
+    try:
+        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+        p = subprocess.Popen(
+            [sys.executable, str(script)],
+            cwd=str(HERE),
+            env=os.environ.copy(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=flags,
+        )
+        return {"enabled": True, "running": True, "pid": p.pid, "started": True}
+    except Exception as exc:
+        return {"enabled": True, "running": False, "reason": str(exc)}
+
+
+def main() -> None:
+    prevent_duplicate()
+    write_status(pid=os.getpid(), running=True, state="starting", workspace=str(WORKSPACE))
+    try:
+        while True:
+            twelve = ensure_twelve()
+            massive = ensure_massive()
+            overall = "healthy" if twelve.get("ok") else "recovering"
+            write_status(
+                pid=os.getpid(),
+                running=True,
+                state=overall,
+                twelve=twelve,
+                massive=massive,
+                check_seconds=CHECK_SECONDS,
+            )
+            time.sleep(CHECK_SECONDS)
+    finally:
+        try:
+            PID_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+        write_status(running=False, state="stopped")
+
+
+if __name__ == "__main__":
+    main()
