@@ -52,20 +52,35 @@ def main() -> int:
             if not git:
                 raise RuntimeError("git_not_found")
 
-            def run_git(inner_args):
+            def run_git(inner_args, inner_timeout=None):
                 return subprocess.run(
                     [git, "-C", str(repo), *inner_args],
                     capture_output=True,
                     text=True,
-                    timeout=timeout,
+                    timeout=inner_timeout or timeout,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
 
+            def reconcile(branch):
+                # First try the clean history-preserving path.
+                run_git(["fetch", "origin", branch], 90)
+                cp_pull = run_git(["pull", "--rebase", "--autostash", "origin", branch], 120)
+                if cp_pull.returncode == 0:
+                    return cp_pull
+
+                # Generated state files can conflict if TMBT and the remote
+                # command channel both moved main. Abort the rebase and merge
+                # instead, keeping the current local generated state on content
+                # conflicts while still importing new remote commands/files.
+                run_git(["rebase", "--abort"])
+                cp_pull = run_git(
+                    ["pull", "--no-rebase", "--autostash", "-X", "ours", "origin", branch],
+                    120,
+                )
+                return cp_pull
+
             cp = run_git(args)
 
-            # ChatGPT can add remote commands while TMBT publishes local state.
-            # If both sides advance, a plain push is rejected. Rebase the local
-            # generated-state commit on top of origin/main, then retry once.
             is_push = bool(args and str(args[0]).lower() == "push")
             err_text = ((cp.stderr or "") + "\n" + (cp.stdout or "")).lower()
             if is_push and cp.returncode != 0 and (
@@ -76,17 +91,37 @@ def main() -> int:
             ):
                 branch_cp = run_git(["rev-parse", "--abbrev-ref", "HEAD"])
                 branch = (branch_cp.stdout or "main").strip() or "main"
-                pull = run_git(["pull", "--rebase", "--autostash", "origin", branch])
+                pull = reconcile(branch)
                 if pull.returncode == 0:
                     cp = run_git(args)
-                else:
-                    run_git(["rebase", "--abort"])
 
             if check and cp.returncode != 0:
                 msg = (cp.stderr or cp.stdout or "git command failed").strip()[:1500]
                 raise RuntimeError(msg)
             return cp
+
+        def robust_pull(repo, branch):
+            cp = hidden_run_git(
+                repo,
+                ["pull", "--rebase", "--autostash", "origin", branch],
+                timeout=120,
+                check=False,
+            )
+            if cp.returncode == 0:
+                return
+            hidden_run_git(repo, ["rebase", "--abort"], timeout=30, check=False)
+            cp = hidden_run_git(
+                repo,
+                ["pull", "--no-rebase", "--autostash", "-X", "ours", "origin", branch],
+                timeout=120,
+                check=False,
+            )
+            if cp.returncode != 0:
+                msg = (cp.stderr or cp.stdout or "git pull failed").strip()[:1500]
+                raise RuntimeError(msg)
+
         github_sync._run_git = hidden_run_git
+        github_sync._pull = robust_pull
 
     # Old github_sync used research_autopilot.start_process(), which would spawn
     # the legacy script without our Databento adapter. Route remote autopilot
