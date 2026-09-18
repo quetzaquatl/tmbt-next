@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime, timezone
+import json
+import os
 from urllib.parse import urlparse, parse_qs
 
 import context_factors
@@ -11,6 +14,56 @@ core = ready.core
 _base_ready_models = ready.ready_models
 _ACTIVE = {"WATCH", "FORMING", "STRONG", "READY", "ARMED", "TRIGGERED", "SIGNAL"}
 _PRE_ENTRY = {"WATCH", "FORMING", "STRONG", "READY", "ARMED", "TRIGGERED"}
+_DATA_SETTINGS = core.WORKSPACE / "live_data" / "tmbt_data_settings.json"
+
+
+def _read_data_settings():
+    try:
+        value = json.loads(_DATA_SETTINGS.read_text(encoding="utf-8", errors="ignore"))
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_data_settings(value):
+    _DATA_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _DATA_SETTINGS.with_suffix(_DATA_SETTINGS.suffix + ".tmp")
+    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, _DATA_SETTINGS)
+    try:
+        os.chmod(_DATA_SETTINGS, 0o600)
+    except Exception:
+        pass
+
+
+def _masked_secret_status():
+    s = _read_data_settings()
+    key = str(s.get("twelve_api_key") or "")
+    massive = str(s.get("massive_api_key") or "")
+    return {
+        "twelve_configured": bool(key),
+        "twelve_last4": key[-4:] if key else None,
+        "massive_configured": bool(massive),
+        "massive_last4": massive[-4:] if massive else None,
+        "updated_at_utc": s.get("updated_at_utc"),
+        "storage": str(_DATA_SETTINGS),
+    }
+
+
+def _save_secret_payload(payload):
+    current = _read_data_settings()
+    if payload.get("clear_twelve"):
+        current.pop("twelve_api_key", None)
+    elif str(payload.get("twelve_api_key") or "").strip():
+        current["twelve_api_key"] = str(payload.get("twelve_api_key")).strip()
+    if payload.get("clear_massive"):
+        current.pop("massive_api_key", None)
+    elif str(payload.get("massive_api_key") or "").strip():
+        current["massive_api_key"] = str(payload.get("massive_api_key")).strip()
+    current["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    _write_data_settings(current)
+    return _masked_secret_status()
+
 
 
 def _side(v):
@@ -148,7 +201,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.22-beta-auto-feed"
+core.APP_VERSION = "0.9.23-beta-data-settings"
 
 
 class Handler(ready.Handler):
@@ -162,7 +215,24 @@ class Handler(ready.Handler):
             ctx = context_factors.build_context(ready.ready_query, _cfg(target))
             ctx["symmetric_smt"] = smt_trade_management.symmetric_smt(ctx)
             return self.json(ctx)
+        if u.path == "/api/data-settings":
+            return self.json(_masked_secret_status())
         return super().do_GET()
+
+    def do_POST(self):
+        u = urlparse(self.path)
+        if u.path != "/api/data-settings":
+            return self.json({"error": "not_found"}, 404)
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+            if length <= 0 or length > 65536:
+                return self.json({"error": "invalid_body"}, 400)
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if not isinstance(payload, dict):
+                return self.json({"error": "invalid_json"}, 400)
+            return self.json({"ok": True, "settings": _save_secret_payload(payload)})
+        except Exception as exc:
+            return self.json({"error": str(exc)}, 500)
 
 
 if __name__ == "__main__":
@@ -171,7 +241,7 @@ if __name__ == "__main__":
     print("Workspace:", core.WORKSPACE)
     print("Desk: visual-priority live workspace + setup cards + notification history")
     print("Inspector: Active/Monitor click force-opens Setup Inspector and criteria")
-    print("Feed automation: self-healing Twelve guardian + optional Massive futures bridge")
+    print("Feed automation: self-healing Twelve guardian + persistent local API settings")
     print("Context hierarchy: symmetric SMT -> PO3 -> Asia/Midnight -> iFVG entry")
     print("SMT entry veto: confirmed divergence can block the opposite setup before entry")
     print("SMT trade management: raw opposite divergence warns/takes partial; confirmed divergence triggers exit review")
