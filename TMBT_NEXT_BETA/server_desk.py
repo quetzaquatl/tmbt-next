@@ -7,6 +7,7 @@ import server_original as original
 
 core = original.core
 _base_to_ms = original._to_ms
+_ORIGINAL_TWELVE_QUERY = original.original_query_bars
 
 
 def _robust_to_ms(v):
@@ -107,14 +108,14 @@ def _canonical_mirror(market="NQ", tf="1H", limit=500):
     NQ/ES are the old Studio's QQQ/SPY prototypes. Keeping this as the only chart
     source is important because the live model engine uses the same price scale.
     """
-    result = original._load_twelve_file(market, tf, limit)
+    result = _ORIGINAL_TWELVE_QUERY(market, tf, limit, "twelve")
     if not result or not result.get("bars"):
         return None
 
     ntf = core.normalize_tf(tf)
     age = result.get("age_seconds")
-    stale_after = original._STALE_AFTER.get(ntf, 3 * 60 * 60)
-    result["stale"] = age is None or float(age) > stale_after
+    stale_after = result.get("stale_after_seconds") or original._STALE_AFTER.get(ntf, 3 * 60 * 60)
+    result["stale"] = bool(result.get("stale", age is None or float(age) > stale_after))
     result["canonical"] = True
     result["identity_ok"] = _identity_matches(str(market).upper(), result)
 
@@ -129,7 +130,7 @@ def _canonical_mirror(market="NQ", tf="1H", limit=500):
         return result
 
     state = "STALE" if result["stale"] else "LIVE"
-    result["note"] = f"twelve · {identity} · {state} · age {original._age_text(age)}"
+    result["note"] = f"twelve · {identity} · {state} · age {original._age_text(age)} · {result.get('feed') or 'canonical'}"
     return result
 
 
