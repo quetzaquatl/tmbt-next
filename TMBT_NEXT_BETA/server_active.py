@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qs
 
 import context_factors
 import historical_store
+import research_autopilot_bridge
 import smt_trade_management
 import server_ready as ready
 
@@ -204,7 +205,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.25-beta-databento-history"
+core.APP_VERSION = "0.9.26-beta-research-autopilot"
 
 
 class Handler(ready.Handler):
@@ -222,6 +223,8 @@ class Handler(ready.Handler):
             return self.json(_masked_secret_status())
         if u.path == "/api/historical-status":
             return self.json(historical_store.status(core.WORKSPACE))
+        if u.path == "/api/research-autopilot/status":
+            return self.json(research_autopilot_bridge.status())
         if u.path == "/api/trader-observations":
             try:
                 text = _OBSERVATIONS_FILE.read_text(encoding="utf-8", errors="ignore")
@@ -232,6 +235,10 @@ class Handler(ready.Handler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        if u.path == "/api/research-autopilot/start":
+            return self.json(research_autopilot_bridge.start())
+        if u.path == "/api/research-autopilot/stop":
+            return self.json(research_autopilot_bridge.stop())
         if u.path != "/api/data-settings":
             return self.json({"error": "not_found"}, 404)
         try:
