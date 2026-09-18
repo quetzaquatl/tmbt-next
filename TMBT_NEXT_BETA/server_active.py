@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.46-beta-trade-replay"
+core.APP_VERSION = "0.9.47-beta-sticky-reports"
 
 
 class Handler(ready.Handler):
