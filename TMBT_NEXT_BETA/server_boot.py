@@ -11,6 +11,7 @@ import research_autopilot_bridge
 import legacy_runtime
 import research_sync_bridge
 import research_scheduler
+import feed_guardian
 
 
 def workspace() -> Path:
@@ -64,6 +65,27 @@ def start_feed_guardian() -> None:
         print("Feed guardian: missing", script)
         return
     try:
+        st = read_json(guardian_status_path())
+        old_pid = int(st.get("pid") or 0)
+        old_generation = str(st.get("guardian_generation") or "")
+        expected_generation = str(feed_guardian.GUARDIAN_GENERATION)
+
+        if old_pid and pid_alive(old_pid) and old_generation == expected_generation:
+            print("Feed guardian: already current · PID", old_pid)
+            return
+
+        if old_pid and pid_alive(old_pid) and old_generation != expected_generation:
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(old_pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=8,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            else:
+                os.kill(old_pid, 15)
+
         subprocess.Popen(
             [sys.executable, str(script)],
             cwd=str(script.parent),
@@ -72,7 +94,7 @@ def start_feed_guardian() -> None:
             stderr=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
-        print("Feed guardian: start requested")
+        print("Feed guardian: start requested · generation", expected_generation)
     except Exception as exc:
         print("Feed guardian: start failed:", exc)
 
