@@ -175,7 +175,7 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
     optimizers = list(p.get("optimizers") or [])
     news = legacy_research_adapter.news_status()
     use_news = bool(cfg.get("test_news", True) and news.get("ready"))
-    total = 1 + len(optimizers) + 1 + (3 if use_news else 0) + 1
+    total = 1 + len(optimizers) + 1 + (3 if use_news else 0) + 1 + 1
     stage = str(auto.get("stage") or "")
     message = str(auto.get("message") or "")
     step = 0
@@ -203,10 +203,13 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
         step = 2 + len(optimizers) + news_idx
         label = f"News-Test: {message or news_idx}"
     elif stage == "validation":
-        step = total
+        step = max(1, total - 1)
         label = "Locked Validation"
-    elif stage == "tick_audit":
+    elif stage == "full_history_audit":
         step = total
+        label = "Full-History Diagnostic"
+    elif stage == "tick_audit":
+        step = max(1, total - 1)
         label = "Tick Audit"
     elif str(auto.get("state") or "").upper() == "COMPLETED" and profile:
         step = total
@@ -460,6 +463,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
         "baseline_summary": baseline,
         "development_summary": dev,
         "validation_summary": val,
+        "full_history_summary": _summary(report, "full_history_summary"),
         "validation": validation,
         "original_validation": old_validation,
         "optimization_steps": _optimization_steps(report),
@@ -470,6 +474,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
             "auto_live_promotion": False,
             "observations_used_for_optimization": False,
             "max_failed_cycles": max_failed_cycles,
+            "full_history_diagnostic_reporting_only": True,
         },
         "performance": research_performance.performance_bundle(report),
     }
