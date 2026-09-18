@@ -122,3 +122,79 @@ def status(workspace: Path | None = None) -> dict[str, Any]:
     value["db_exists"] = p.exists()
     value["db_size_bytes"] = p.stat().st_size if p.exists() else None
     return value
+
+
+def available_dates(market: str, *, workspace: Path | None = None, path: Path | None = None):
+    """Return UTC dates available in the local 1m Databento continuous series."""
+    from datetime import date
+    root = _norm_market(market)
+    p = (path or db_path(workspace)).resolve()
+    if not p.exists():
+        return []
+    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+    try:
+        rows = con.execute(
+            """
+            SELECT DISTINCT strftime('%Y-%m-%d', t / 1000, 'unixepoch')
+            FROM bars_1m
+            WHERE root=?
+            ORDER BY 1
+            """,
+            (root,),
+        ).fetchall()
+    finally:
+        con.close()
+    out = []
+    for (ds,) in rows:
+        try:
+            out.append(date.fromisoformat(str(ds)))
+        except Exception:
+            pass
+    return out
+
+
+def load_utc_day_1m(
+    market: str,
+    utc_date,
+    *,
+    workspace: Path | None = None,
+    path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Load one UTC day of 1m bars for research/backtest compatibility."""
+    from datetime import datetime, time, timedelta, timezone
+    root = _norm_market(market)
+    if isinstance(utc_date, str):
+        from datetime import date
+        utc_date = date.fromisoformat(utc_date)
+    start = datetime.combine(utc_date, time.min, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    a = int(start.timestamp() * 1000)
+    b = int(end.timestamp() * 1000)
+    p = (path or db_path(workspace)).resolve()
+    if not p.exists():
+        return []
+    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+    try:
+        rows = con.execute(
+            """
+            SELECT t, symbol, o, h, l, c, v
+            FROM bars_1m
+            WHERE root=? AND t>=? AND t<?
+            ORDER BY t
+            """,
+            (root, a, b),
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        {
+            "t": int(t),
+            "symbol": str(symbol),
+            "o": float(o),
+            "h": float(h),
+            "l": float(l),
+            "c": float(c),
+            "v": float(v),
+        }
+        for t, symbol, o, h, l, c, v in rows
+    ]
