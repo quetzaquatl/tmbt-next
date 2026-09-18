@@ -269,3 +269,10 @@ body.workspace-page-open .workspace-pages{display:block}
 .outcome-chart-actions button:hover{background:#17304a;border-color:#4e789e;color:#e2f1ff}
 .snapshot-banner #backOutcome{margin-left:auto}
 .snapshot-banner #backLive{margin-left:4px}
+
+
+/* v0.9.48 — research heartbeat + full-history diagnostic */
+.research-inner-progress{margin-top:8px;padding-top:8px;border-top:1px solid #223247}
+.research-inner-progress .progress.sub{height:5px;margin-top:6px;opacity:.9}
+.research-split-line,.full-history-note{margin:9px 0;padding:7px 9px;border:1px solid #2a4056;border-radius:7px;background:#0d1722;color:#8ea3b8;font-size:9px}
+.full-history-note{border-color:#385632;background:#101b13;color:#a8d7a2}
