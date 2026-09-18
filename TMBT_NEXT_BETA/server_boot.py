@@ -69,7 +69,7 @@ def start_feed_guardian() -> None:
             env=os.environ.copy(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
         print("Feed guardian: start requested")
     except Exception as exc:
