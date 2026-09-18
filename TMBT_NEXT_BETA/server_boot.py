@@ -108,6 +108,77 @@ def prepare_legacy_runtime() -> None:
         print("Migration runtime unavailable:", exc)
 
 
+def _start_migrated_worker(script_name: str, status_rel: str, args: list[str]) -> dict:
+    status_path = workspace() / status_rel
+    try:
+        st = read_json(status_path)
+        pid = int(st.get("pid") or 0)
+        if pid and pid_alive(pid):
+            return {
+                "ok": True,
+                "started": False,
+                "pid": pid,
+                "state": st.get("state") or "running",
+                "status": str(status_path),
+            }
+
+        script = legacy_runtime.script(script_name)
+        cmd = [sys.executable, str(script), *args]
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(script.parent),
+            env=os.environ.copy(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+        )
+        return {
+            "ok": True,
+            "started": True,
+            "pid": proc.pid,
+            "state": "start_requested",
+            "status": str(status_path),
+            "script": str(script),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "started": False,
+            "state": "error",
+            "error": f"{type(exc).__name__}: {exc}",
+            "status": str(status_path),
+        }
+
+
+def start_migrated_live_workers() -> None:
+    signal = _start_migrated_worker(
+        "live_signal_agent.py",
+        r"live_signals\agent_status.json",
+        ["--run"],
+    )
+    paper = _start_migrated_worker(
+        "paper_trader.py",
+        r"paper_account\agent_status.json",
+        ["--run"],
+    )
+    print(
+        "Live signal agent:",
+        signal.get("state"),
+        "· PID:", signal.get("pid") or "—",
+        "· started:", bool(signal.get("started")),
+    )
+    if signal.get("error"):
+        print("  error:", signal.get("error"))
+    print(
+        "Paper trader:",
+        paper.get("state"),
+        "· PID:", paper.get("pid") or "—",
+        "· started:", bool(paper.get("started")),
+    )
+    if paper.get("error"):
+        print("  error:", paper.get("error"))
+
+
 def start_research_sync() -> None:
     try:
         result = research_sync_bridge.start()
@@ -167,6 +238,7 @@ print("========================================")
 print("Workspace:", workspace())
 prepare_legacy_runtime()
 start_feed_guardian()
+start_migrated_live_workers()
 start_research_sync()
 start_research_scheduler()
 print_research_status()
