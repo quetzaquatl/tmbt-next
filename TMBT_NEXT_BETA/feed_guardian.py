@@ -28,6 +28,10 @@ _last_massive_start = 0.0
 _disconnected_since: float | None = None
 
 
+def win_no_window() -> int:
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -83,6 +87,7 @@ def pid_alive(pid: Any) -> bool:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 timeout=4,
+                creationflags=win_no_window(),
             )
             return str(pid).encode("ascii") in (r.stdout or b"")
         except Exception:
@@ -224,9 +229,7 @@ def _spawn_file(path: Path) -> subprocess.Popen:
     env = os.environ.copy()
     env.update(secret_env())
     env["TMBT_WORKSPACE"] = str(WORKSPACE)
-    flags = 0
-    if os.name == "nt":
-        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    flags = win_no_window()
     if ext in {".bat", ".cmd"}:
         cmd = ["cmd.exe", "/c", str(path)]
     elif ext == ".ps1":
@@ -260,7 +263,7 @@ def start_twelve_collector(reason: str) -> dict[str, Any]:
             env = os.environ.copy()
             env.update(secret_env())
             env["TMBT_WORKSPACE"] = str(WORKSPACE)
-            flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+            flags = win_no_window()
             p = subprocess.Popen(
                 explicit_cmd,
                 cwd=str(WORKSPACE),
@@ -311,7 +314,8 @@ def ensure_twelve() -> dict[str, Any]:
         if os.name == "nt":
             try:
                 subprocess.run(["taskkill", "/PID", str(int(st.get("pid"))), "/T", "/F"],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8,
+                               creationflags=win_no_window())
                 time.sleep(1)
             except Exception:
                 pass
@@ -341,7 +345,7 @@ def ensure_massive() -> dict[str, Any]:
     _last_massive_start = time.time()
     script = HERE / "massive_futures_bridge.py"
     try:
-        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+        flags = win_no_window()
         p = subprocess.Popen(
             [sys.executable, str(script)],
             cwd=str(HERE),
