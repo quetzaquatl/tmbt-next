@@ -7,6 +7,17 @@ from context_factors import ContextConfig, DEFAULT_CONFIG, evaluate_bars
 import smt_trade_management
 
 
+def load_local_databento_bars(market: str, timeframe: str, as_of_ms: int, limit: int) -> list[dict[str, Any]]:
+    """Use the locally imported Databento NQ/ES/GC store.
+
+    This keeps the historical engine point-in-time safe: historical_store only
+    returns bars that were fully closed at or before as_of_ms.
+    """
+    from historical_store import load_bars
+
+    return load_bars(market, timeframe, as_of_ms, limit)
+
+
 # Vendor-agnostic hook for Trading Model Backtest Studio.
 # The only missing piece after the historical NQ/ES data is purchased is a loader
 # with signature: load_bars(market, timeframe, as_of_ms, limit) -> list[dict].
