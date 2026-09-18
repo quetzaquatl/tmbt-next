@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import legacy_runtime
+
 WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\\Projekt model\\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 HERE = Path(__file__).resolve().parent
 STATUS = WORKSPACE / "live_data" / "tmbt_feed_guardian_status.json"
@@ -141,6 +143,15 @@ def _score_candidate(path: Path) -> int:
 
 
 def discover_twelve_launcher() -> Path | None:
+    # Prefer the self-contained migration runtime. Once the audit bundle exists,
+    # TMBT Next no longer needs the old Studio directory to run Twelve.
+    try:
+        native = legacy_runtime.script("twelve_live.py")
+        if native.exists():
+            return native.resolve()
+    except Exception:
+        pass
+
     explicit = os.environ.get("TMBT_TWELVE_COLLECTOR_PATH", "").strip().strip('"')
     if explicit:
         p = Path(explicit)
@@ -222,6 +233,8 @@ def _spawn_file(path: Path) -> subprocess.Popen:
         cmd = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(path)]
     elif ext == ".py":
         cmd = [sys.executable, str(path)]
+        if path.name.lower() == "twelve_live.py":
+            cmd.append("--run")
     else:
         raise RuntimeError(f"unsupported collector launcher: {path}")
     return subprocess.Popen(
@@ -264,7 +277,7 @@ def start_twelve_collector(reason: str) -> dict[str, Any]:
             return {
                 "started": False,
                 "reason": "collector launcher not found",
-                "hint": "Set TMBT_TWELVE_COLLECTOR_PATH once to the Old Studio Twelve collector/launcher.",
+                "hint": "Run AUDIT_OLD_STUDIO.bat once so TMBT Next can use its self-contained migration runtime.",
             }
         p = _spawn_file(launcher)
         return {"started": True, "pid": p.pid, "launcher": str(launcher), "reason": reason}
