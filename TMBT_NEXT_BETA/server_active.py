@@ -206,7 +206,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.29-beta-background-fix"
+core.APP_VERSION = "0.9.30-beta-git-window-fix"
 
 
 class Handler(ready.Handler):
