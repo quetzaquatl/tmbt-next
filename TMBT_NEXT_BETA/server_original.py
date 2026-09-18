@@ -192,41 +192,69 @@ def _decorate_local(local, market="NQ", tf="1H"):
     ntf = core.normalize_tf(tf)
     last = bars[-1]
     last_ms = _to_ms(last.get("close_t")) or _to_ms(last.get("t"))
-    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    now = datetime.now(timezone.utc)
+    now_ms = int(now.timestamp() * 1000)
     bar_age = max(0.0, (now_ms - last_ms) / 1000.0) if last_ms else None
+
+    received = _parse_dt(last.get("received_at_utc"))
+    receive_age = max(0.0, (now - received).total_seconds()) if received else None
 
     file_age = None
     db = local.get("db")
     try:
         if db:
-            file_age = max(0.0, datetime.now(timezone.utc).timestamp() - Path(db).stat().st_mtime)
+            file_age = max(0.0, now.timestamp() - Path(db).stat().st_mtime)
     except Exception:
         file_age = None
 
+    src = str(local.get("source") or last.get("source") or "local")
+    ticker = last.get("ticker") or last.get("market") or str(market).upper()
+    tickerid = last.get("tickerid") or ticker
+    exchange = last.get("exchange")
+
     stale_after = _STALE_AFTER.get(ntf, 3 * 60 * 60)
-    stale = bar_age is None or bar_age > stale_after
-    src = local.get("source") or last.get("source") or "local"
-    ticker = last.get("market") or str(market).upper()
-    local["feed"] = "original_sqlite"
+    freshness_age = receive_age if receive_age is not None else bar_age
+    if src.lower() == "twelve":
+        td_status = core.read_json(core.WORKSPACE / "live_data" / "twelve_status.json", {}) or {}
+        try:
+            poll_seconds = max(300, int(td_status.get("poll_seconds") or 420))
+        except Exception:
+            poll_seconds = 420
+        stale_after = max(600, poll_seconds + 180)
+
+    stale = freshness_age is None or freshness_age > stale_after
+    local["feed"] = "original_twelve_sqlite" if src.lower() == "twelve" else "original_sqlite"
     local["provider"] = src
     local["ticker"] = ticker
-    local["tickerid"] = ticker
+    local["tickerid"] = tickerid
+    local["exchange"] = exchange
     local["source"] = None
     local["last_bar_utc"] = datetime.fromtimestamp(last_ms / 1000.0, tz=timezone.utc).isoformat() if last_ms else None
-    local["age_seconds"] = bar_age
+    local["last_received_at_utc"] = received.isoformat() if received else None
+    local["age_seconds"] = freshness_age
+    local["bar_age_seconds"] = bar_age
     local["file_age_seconds"] = file_age
+    local["stale_after_seconds"] = stale_after
     local["stale"] = stale
-    local["note"] = f"{src} · {ticker} · original local feed · {'STALE' if stale else 'LIVE'} · bar age {_age_text(bar_age)}"
+    local["note"] = f"{src} · {tickerid or ticker} · SQLite · {'STALE' if stale else 'LIVE'} · receive age {_age_text(freshness_age)}"
     return local
 
 
 def original_query_bars(market="NQ", tf="1H", limit=500, source=None):
     original = _load_twelve_file(market, tf, limit)
-    local = _decorate_local(_LOCAL_SQLITE_QUERY(market, tf, limit, source), market, tf)
+    # Twelve's collector writes directly into tradingview_live.sqlite3. Query
+    # that canonical source explicitly instead of relying on the older JSON
+    # export mirror.
+    local = _decorate_local(_LOCAL_SQLITE_QUERY(market, tf, limit, "twelve"), market, tf)
 
     if original and original.get("bars"):
-        if local.get("bars") and _latest_ms(local) > _latest_ms(original):
-            return local
+        if local.get("bars"):
+            local_ms = _latest_ms(local)
+            original_ms = _latest_ms(original)
+            # Current candles are upserted in-place, so both stores can have the
+            # same bar_open_ms while SQLite has the newer close/receive time.
+            if local_ms >= original_ms:
+                return local
         return original
 
     if local.get("bars"):
