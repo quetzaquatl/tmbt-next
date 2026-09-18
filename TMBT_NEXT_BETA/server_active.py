@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.32-beta-feed-watchdog"
+core.APP_VERSION = "0.9.33-beta-fast-twelve"
 
 
 class Handler(ready.Handler):
