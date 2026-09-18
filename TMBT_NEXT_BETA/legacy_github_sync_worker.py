@@ -51,13 +51,37 @@ def main() -> int:
             git = github_sync._git_executable()
             if not git:
                 raise RuntimeError("git_not_found")
-            cp = subprocess.run(
-                [git, "-C", str(repo), *args],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
+
+            def run_git(inner_args):
+                return subprocess.run(
+                    [git, "-C", str(repo), *inner_args],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+
+            cp = run_git(args)
+
+            # ChatGPT can add remote commands while TMBT publishes local state.
+            # If both sides advance, a plain push is rejected. Rebase the local
+            # generated-state commit on top of origin/main, then retry once.
+            is_push = bool(args and str(args[0]).lower() == "push")
+            err_text = ((cp.stderr or "") + "\n" + (cp.stdout or "")).lower()
+            if is_push and cp.returncode != 0 and (
+                "non-fast-forward" in err_text
+                or "[rejected]" in err_text
+                or "fetch first" in err_text
+                or "behind its remote counterpart" in err_text
+            ):
+                branch_cp = run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+                branch = (branch_cp.stdout or "main").strip() or "main"
+                pull = run_git(["pull", "--rebase", "--autostash", "origin", branch])
+                if pull.returncode == 0:
+                    cp = run_git(args)
+                else:
+                    run_git(["rebase", "--abort"])
+
             if check and cp.returncode != 0:
                 msg = (cp.stderr or cp.stdout or "git command failed").strip()[:1500]
                 raise RuntimeError(msg)
