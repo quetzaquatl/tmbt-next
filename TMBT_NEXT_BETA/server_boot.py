@@ -108,12 +108,12 @@ def prepare_legacy_runtime() -> None:
         print("Migration runtime unavailable:", exc)
 
 
-def _start_migrated_worker(script_name: str, status_rel: str, args: list[str]) -> dict:
+def _start_migrated_worker(script_name: str, status_rel: str, args: list[str], *, force_restart: bool = False) -> dict:
     status_path = workspace() / status_rel
     try:
         st = read_json(status_path)
         pid = int(st.get("pid") or 0)
-        if pid and pid_alive(pid):
+        if pid and pid_alive(pid) and not force_restart:
             return {
                 "ok": True,
                 "started": False,
@@ -121,6 +121,17 @@ def _start_migrated_worker(script_name: str, status_rel: str, args: list[str]) -
                 "state": st.get("state") or "running",
                 "status": str(status_path),
             }
+        if pid and pid_alive(pid) and force_restart:
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=8,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            else:
+                os.kill(pid, 15)
 
         script = legacy_runtime.script(script_name)
         cmd = [sys.executable, str(script), *args]
@@ -155,6 +166,7 @@ def start_migrated_live_workers() -> None:
         "live_signal_agent.py",
         r"live_signals\agent_status.json",
         ["--run"],
+        force_restart=True,
     )
     paper = _start_migrated_worker(
         "paper_trader.py",
