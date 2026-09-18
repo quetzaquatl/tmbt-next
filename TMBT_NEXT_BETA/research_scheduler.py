@@ -467,6 +467,7 @@ def daemon() -> None:
             available = research_autopilot_bridge.profiles()
             profiles = [p for p in cfg.get("profiles") or [] if p in available]
             ran = False
+            completed_profiles = []
             for profile in profiles:
                 if not _due(profile, state, cfg):
                     continue
@@ -480,21 +481,47 @@ def daemon() -> None:
                     continue
                 try:
                     res = run_profile(profile, cfg, state)
+                    ran = True
+                    completed_profiles.append({
+                        "profile": profile,
+                        "ok": bool(res.get("ok")),
+                        "verdict": res.get("verdict"),
+                        "error": res.get("error"),
+                    })
                     _status(
                         pid=os.getpid(),
                         running=True,
-                        state="IDLE" if res.get("ok") else "ERROR",
+                        state="BETWEEN_PROFILES",
                         active_profile=None,
+                        completed_profiles_this_pass=completed_profiles,
                         last_result=res,
                         last_error="" if res.get("ok") else str(res.get("error") or ""),
                     )
                 except Exception as exc:
-                    _status(pid=os.getpid(), running=True, state="ERROR", active_profile=None, last_error=f"{type(exc).__name__}: {exc}")
-                ran = True
-                break
+                    ran = True
+                    completed_profiles.append({
+                        "profile": profile,
+                        "ok": False,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    })
+                    _status(
+                        pid=os.getpid(),
+                        running=True,
+                        state="BETWEEN_PROFILES",
+                        active_profile=None,
+                        completed_profiles_this_pass=completed_profiles,
+                        last_error=f"{type(exc).__name__}: {exc}",
+                    )
+                # Continue immediately with the next due profile. One model's
+                # PASS/FAIL must not block ES/XAU from getting their own cycle.
 
-            if not ran:
-                _status(pid=os.getpid(), running=True, state="IDLE", active_profile=None)
+            _status(
+                pid=os.getpid(),
+                running=True,
+                state="IDLE",
+                active_profile=None,
+                completed_profiles_this_pass=completed_profiles,
+            )
             time.sleep(cfg["poll_seconds"])
     finally:
         try:
