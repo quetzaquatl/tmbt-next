@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import context_factors
@@ -15,6 +16,7 @@ _base_ready_models = ready.ready_models
 _ACTIVE = {"WATCH", "FORMING", "STRONG", "READY", "ARMED", "TRIGGERED", "SIGNAL"}
 _PRE_ENTRY = {"WATCH", "FORMING", "STRONG", "READY", "ARMED", "TRIGGERED"}
 _DATA_SETTINGS = core.WORKSPACE / "live_data" / "tmbt_data_settings.json"
+_OBSERVATIONS_FILE = Path(__file__).resolve().parent.parent / "TRADER_OBSERVATIONS.md"
 
 
 def _read_data_settings():
@@ -201,7 +203,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.23-beta-data-settings"
+core.APP_VERSION = "0.9.24-beta-trader-notes"
 
 
 class Handler(ready.Handler):
@@ -217,6 +219,12 @@ class Handler(ready.Handler):
             return self.json(ctx)
         if u.path == "/api/data-settings":
             return self.json(_masked_secret_status())
+        if u.path == "/api/trader-observations":
+            try:
+                text = _OBSERVATIONS_FILE.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                text = ""
+            return self.json({"text": text, "source": str(_OBSERVATIONS_FILE), "mode": "observations_only", "engine_used": False})
         return super().do_GET()
 
     def do_POST(self):
