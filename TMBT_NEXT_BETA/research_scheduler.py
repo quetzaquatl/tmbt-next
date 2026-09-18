@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import historical_store
+import legacy_research_adapter
 import research_autopilot_bridge
 
 HERE = Path(__file__).resolve().parent
@@ -118,15 +119,78 @@ def _pid_alive(pid: Any) -> bool:
         return False
 
 
+def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
+    auto = research_autopilot_bridge.status()
+    profile = str(auto.get("profile") or _read_json(STATUS).get("active_profile") or "")
+    profiles = research_autopilot_bridge.profiles()
+    p = profiles.get(profile) or {}
+    optimizers = list(p.get("optimizers") or [])
+    news = legacy_research_adapter.news_status()
+    use_news = bool(cfg.get("test_news", True) and news.get("ready"))
+    total = 1 + len(optimizers) + 1 + (3 if use_news else 0) + 1
+    stage = str(auto.get("stage") or "")
+    message = str(auto.get("message") or "")
+    step = 0
+    label = "Wartet"
+
+    if stage == "baseline":
+        step, label = 1, "Development Baseline"
+    elif stage.startswith("optimizer_"):
+        try:
+            idx = int(stage.split("_", 1)[1])
+        except Exception:
+            idx = 1
+        step = 1 + idx
+        label = message or f"Optimizer {idx}"
+    elif stage == "candidate_dev":
+        step = 2 + len(optimizers)
+        label = "Optimierter Development-Kandidat"
+    elif stage == "news_test" and use_news:
+        news_labels = {
+            "Skip 15/15": 1,
+            "Skip 30/15": 2,
+            "Post-news 30m": 3,
+        }
+        news_idx = news_labels.get(message, 1)
+        step = 2 + len(optimizers) + news_idx
+        label = f"News-Test: {message or news_idx}"
+    elif stage == "validation":
+        step = total
+        label = "Locked Validation"
+    elif stage == "tick_audit":
+        step = total
+        label = "Tick Audit"
+    elif str(auto.get("state") or "").upper() == "COMPLETED" and profile:
+        step = total
+        label = "Zyklus abgeschlossen"
+
+    pct = round(100.0 * step / max(total, 1), 1) if step else 0.0
+    return {
+        "profile": profile or None,
+        "label": p.get("label") or profile or None,
+        "stage": stage or None,
+        "stage_label": label,
+        "step": step,
+        "total": total,
+        "pct": pct,
+        "running": bool(auto.get("running")),
+        "message": message,
+        "news_tests_enabled": use_news,
+    }
+
+
 def status() -> dict[str, Any]:
     st = _read_json(STATUS)
     pid = int(st.get("pid") or 0)
     st["running"] = bool(st.get("running") and _pid_alive(pid))
     st["pid"] = pid or None
-    st["config"] = load_config()
+    cfg = load_config()
+    st["config"] = cfg
     st["profiles"] = _read_json(PROFILE_STATE).get("profiles", {})
     st["latest_report"] = _read_json(LATEST_REPORT)
     st["databento"] = historical_store.status(WORKSPACE)
+    st["news"] = legacy_research_adapter.news_status()
+    st["cycle_progress"] = _cycle_progress(cfg)
     return st
 
 
