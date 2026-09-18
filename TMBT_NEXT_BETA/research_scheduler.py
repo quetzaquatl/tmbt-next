@@ -202,7 +202,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
 
     if verdict == "PASS":
         candidate_state = "READY_FOR_LIVE_REVIEW"
-        next_steps.append("Automatische Optimierung pausiert. Kandidat fuer manuellen Live-/Paper-Review.")
+        next_steps.append("Kandidat fuer manuellen Live-/Paper-Review; automatische Optimierung pausiert bis zum woechentlichen Stabilitaets-Retest.")
         next_steps.append("Kein automatisches Live-Schalten; Holdout/OOS bleibt gesperrt.")
     elif failed_cycles >= max_failed_cycles:
         candidate_state = "REVIEW_REQUIRED"
@@ -349,16 +349,26 @@ def _databento_ready_for(profile: str) -> bool:
     return bool(st.get("db_exists") and str(st.get("state") or "").upper() == "COMPLETE")
 
 
-def _wait_for_autopilot(profile: str, started_after: datetime) -> tuple[dict[str, Any], dict[str, Any]]:
+def _wait_for_autopilot(profile: str, started_after: datetime, timeout_hours: int = 24) -> tuple[dict[str, Any], dict[str, Any]]:
+    deadline = _now() + timedelta(hours=max(1, timeout_hours))
+    stopped_since: datetime | None = None
     while True:
         st = research_autopilot_bridge.status()
+        report = research_autopilot_bridge.latest_report()
         if not st.get("running"):
-            report = research_autopilot_bridge.latest_report()
             report_time = _parse_dt(report.get("finished_at_utc"))
             if report.get("profile") == profile and report_time and report_time >= started_after:
                 return st, report
             if str(st.get("state") or "").upper() in {"FAILED", "CANCELLED"}:
                 return st, report
+            if stopped_since is None:
+                stopped_since = _now()
+            elif (_now() - stopped_since).total_seconds() > 60:
+                return st, report
+        else:
+            stopped_since = None
+        if _now() >= deadline:
+            return {**st, "state": "FAILED", "last_error": "scheduler_autopilot_timeout"}, report
         time.sleep(10)
 
 
