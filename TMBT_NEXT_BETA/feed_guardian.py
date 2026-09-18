@@ -36,6 +36,18 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def parse_iso(value: Any) -> datetime | None:
+    try:
+        if not value:
+            return None
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
 def read_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
@@ -294,10 +306,61 @@ def ensure_twelve() -> dict[str, Any]:
     alive = pid_alive(st.get("pid"))
     connected = bool(st.get("connected"))
     state = str(st.get("state") or "unknown")
+    updated = parse_iso(st.get("updated_at_utc"))
+    heartbeat_age = (
+        max(0.0, (datetime.now(timezone.utc) - updated).total_seconds())
+        if updated else None
+    )
+    try:
+        poll_seconds = max(300, int(st.get("poll_seconds") or 420))
+    except Exception:
+        poll_seconds = 420
+    heartbeat_limit = max(900, (poll_seconds * 2) + 120)
+
+    # "connected" alone is insufficient: a wedged collector process can stay
+    # alive forever while no longer polling. Quota pause is intentional and
+    # must not trigger a restart loop.
+    heartbeat_stale = (
+        alive
+        and connected
+        and state != "quota_pause"
+        and (heartbeat_age is None or heartbeat_age > heartbeat_limit)
+    )
+    if heartbeat_stale:
+        if os.name == "nt":
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(int(st.get("pid"))), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=8,
+                    creationflags=win_no_window(),
+                )
+                time.sleep(1)
+            except Exception:
+                pass
+        launch = start_twelve_collector("collector heartbeat stale")
+        return {
+            "ok": False,
+            "alive": False,
+            "connected": False,
+            "state": state,
+            "heartbeat_age_seconds": heartbeat_age,
+            "heartbeat_limit_seconds": heartbeat_limit,
+            "restart": launch,
+        }
 
     if alive and connected:
         _disconnected_since = None
-        return {"ok": True, "alive": True, "connected": True, "state": state, "pid": st.get("pid")}
+        return {
+            "ok": True,
+            "alive": True,
+            "connected": True,
+            "state": state,
+            "pid": st.get("pid"),
+            "heartbeat_age_seconds": heartbeat_age,
+            "heartbeat_limit_seconds": heartbeat_limit,
+        }
 
     if alive and not connected:
         if _disconnected_since is None:
