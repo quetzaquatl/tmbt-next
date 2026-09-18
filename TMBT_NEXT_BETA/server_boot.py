@@ -123,7 +123,7 @@ def print_research_status() -> None:
 
 def print_collector_status() -> None:
     st = read_json(collector_status_path())
-    print("Original Twelve collector (owned by Old Studio):")
+    print("Twelve collector (TMBT migration runtime):")
     print("  status:", collector_status_path())
     if not st:
         print("  state: no status file")
@@ -136,7 +136,7 @@ def print_collector_status() -> None:
     )
     if st.get("last_error") and not st.get("connected"):
         print("  last_error:", str(st.get("last_error"))[:500])
-    print("  note: Feed Guardian will restart the existing collector when needed.")
+    print("  note: Feed Guardian restarts the migrated collector when needed.")
 
 
 print("========================================")
