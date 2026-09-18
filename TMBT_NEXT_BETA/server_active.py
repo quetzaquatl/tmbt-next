@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.39-beta-research-dashboard"
+core.APP_VERSION = "0.9.40-beta-sync-recovery"
 
 
 class Handler(ready.Handler):
