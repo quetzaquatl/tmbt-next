@@ -20,6 +20,7 @@ CONFIG = ROOT / "config.json"
 STATUS = ROOT / "status.json"
 PROFILE_STATE = ROOT / "profiles.json"
 PID_FILE = ROOT / "scheduler.pid"
+LOCK_FILE = ROOT / "scheduler.lock"
 REPORT_ROOT = WORKSPACE / "research_reports"
 LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
@@ -421,8 +422,32 @@ def run_profile(profile: str, cfg: dict[str, Any], state: dict[str, Any]) -> dic
     return {"ok": True, "profile": profile, "verdict": verdict, "analysis": analysis, "paths": paths}
 
 
+def _acquire_singleton() -> bool:
+    ROOT.mkdir(parents=True, exist_ok=True)
+    for _ in range(2):
+        try:
+            fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(str(os.getpid()))
+            return True
+        except FileExistsError:
+            try:
+                old_pid = int(LOCK_FILE.read_text(encoding="utf-8").strip())
+            except Exception:
+                old_pid = 0
+            if old_pid and _pid_alive(old_pid):
+                return False
+            try:
+                LOCK_FILE.unlink(missing_ok=True)
+            except Exception:
+                return False
+    return False
+
+
 def daemon() -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
+    if not _acquire_singleton():
+        return
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
     _status(pid=os.getpid(), running=True, state="IDLE", started_at_utc=_now_iso(), last_error="")
     try:
@@ -474,6 +499,11 @@ def daemon() -> None:
     finally:
         try:
             PID_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+        try:
+            if LOCK_FILE.exists() and LOCK_FILE.read_text(encoding="utf-8").strip() == str(os.getpid()):
+                LOCK_FILE.unlink(missing_ok=True)
         except Exception:
             pass
         _status(running=False, state="STOPPED")
