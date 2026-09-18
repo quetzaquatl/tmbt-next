@@ -104,22 +104,25 @@
   function auditLayout(logProblems=false){
     const a=rect(app),w=rect(workspace),s=rect(split),b=rect(bottom),c=rect(chartHost);
     const issues=[],tol=2;
-    if(!a||!w)issues.push('layout nodes missing');
-    else{
-      // v0.9.41+ uses browser-style full-page workspace tabs; the legacy
-      // horizontal drawer/splitter may intentionally not exist anymore.
-      if(s&&b){
-        if(w.bottom>s.top+tol)issues.push(`workspace overlaps splitter by ${Math.round(w.bottom-s.top)}px`);
-        if(s.bottom>b.top+tol)issues.push(`splitter overlaps bottom panel by ${Math.round(s.bottom-b.top)}px`);
-        if(b.bottom>a.bottom+tol)issues.push(`bottom panel exceeds app by ${Math.round(b.bottom-a.bottom)}px`);
-      }else if(w.bottom>a.bottom+tol){
-        issues.push(`workspace exceeds app by ${Math.round(w.bottom-a.bottom)}px`);
+    const activeView=String(document.body.dataset.workspaceView||"desk");
+    const deskVisible=activeView==="desk"&&!document.body.classList.contains("workspace-page-open");
+    if(!a)issues.push('app shell missing');
+    else if(deskVisible){
+      if(!w)issues.push('desk workspace missing');
+      else{
+        if(s&&b){
+          if(w.bottom>s.top+tol)issues.push(`workspace overlaps splitter by ${Math.round(w.bottom-s.top)}px`);
+          if(s.bottom>b.top+tol)issues.push(`splitter overlaps bottom panel by ${Math.round(s.bottom-b.top)}px`);
+          if(b.bottom>a.bottom+tol)issues.push(`bottom panel exceeds app by ${Math.round(b.bottom-a.bottom)}px`);
+        }else if(w.bottom>a.bottom+tol){
+          issues.push(`workspace exceeds app by ${Math.round(w.bottom-a.bottom)}px`);
+        }
+        if(c&&c.bottom>w.bottom+tol)issues.push(`chart paints below workspace by ${Math.round(c.bottom-w.bottom)}px`);
+        if(w.height<180)issues.push(`workspace too small (${Math.round(w.height)}px)`);
+        if(c&&c.width<320)issues.push(`chart too narrow (${Math.round(c.width)}px)`);
       }
-      if(c&&c.bottom>w.bottom+tol)issues.push(`chart paints below workspace by ${Math.round(c.bottom-w.bottom)}px`);
-      if(w.height<180)issues.push(`workspace too small (${Math.round(w.height)}px)`);
-      if(c&&c.width<320)issues.push(`chart too narrow (${Math.round(c.width)}px)`);
     }
-    const result={ok:issues.length===0,issues,bottom:b?Math.round(current()):0,left:Math.round(currentLeft()),right:Math.round(currentRight()),maxBottom:b?Math.round(maxBottom()):0,viewport:{w:window.innerWidth,h:window.innerHeight}};
+    const result={ok:issues.length===0,issues,mode:activeView,desk_visible:deskVisible,bottom:b?Math.round(current()):0,left:Math.round(currentLeft()),right:Math.round(currentRight()),maxBottom:b?Math.round(maxBottom()):0,viewport:{w:window.innerWidth,h:window.innerHeight}};
     window.__tmbtLayoutAudit=result;
     if(logProblems&&!result.ok&&typeof log==='function')log('Layout audit: '+issues.join(' | '));
     return result;
@@ -130,12 +133,12 @@
     const host=document.querySelector('#systemView');if(!host)return;
     host.querySelector('.layout-audit-card')?.remove();
     const a=auditLayout(false),card=document.createElement('div');card.className='layout-audit-card'+(a.ok?'':' bad');
-    card.innerHTML=`<span class="status-dot ${a.ok?'ok':'bad'}"></span><b>Client Layout</b><span class="audit-state">${a.ok?'PASS':'FAIL'}</span><small>${a.ok?`keine Überlappung · drawer ${a.bottom}px · chart workspace bounded`:`${a.issues.join(' · ')}`}</small>`;
+    card.innerHTML=`<span class="status-dot ${a.ok?'ok':'bad'}"></span><b>Client Layout</b><span class="audit-state">${a.ok?'PASS':'FAIL'}</span><small>${a.ok?(a.desk_visible?'Desk-Geometrie korrekt · Chart bounded':`Full-page ${a.mode} aktiv · Desk-Geometrie absichtlich ausgeblendet`):a.issues.join(' · ')}</small>`;
     host.prepend(card);
   }
 
   if('ResizeObserver' in window&&chartHost){const ro=new ResizeObserver(()=>redraw());ro.observe(chartHost)}
-  document.querySelector('[data-tab="system"]')?.addEventListener('click',()=>setTimeout(paintAudit,450));
+  document.querySelector('[data-workspace-view="system"]')?.addEventListener('click',()=>setTimeout(paintAudit,450));
 
   window.addEventListener('resize',()=>{
     if(!document.body.classList.contains('bottom-collapsed'))setBottom(current(),false);
