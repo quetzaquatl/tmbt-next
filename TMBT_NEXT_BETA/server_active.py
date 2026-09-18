@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.47-beta-sticky-reports"
+core.APP_VERSION = "0.9.48-beta-full-history-progress"
 
 
 class Handler(ready.Handler):
