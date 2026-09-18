@@ -15,6 +15,10 @@ STATUS = WORKSPACE / "github_sync_status.json"
 DEFAULT_REPO = WORKSPACE / "github_research_repo"
 
 
+def _win_no_window() -> int:
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     try:
         x = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
@@ -42,6 +46,7 @@ def _pid_alive(pid: Any) -> bool:
             cp = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5,
+                creationflags=_win_no_window(),
             )
             return str(pid).encode("ascii") in (cp.stdout or b"")
         except Exception:
@@ -58,7 +63,7 @@ def _git(repo: Path, *args: str) -> str:
         cp = subprocess.run(
             ["git", "-C", str(repo), *args],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, timeout=8,
+            text=True, timeout=8, creationflags=_win_no_window(),
         )
         return (cp.stdout or "").strip() if cp.returncode == 0 else ""
     except Exception:
@@ -145,9 +150,7 @@ def start() -> dict[str, Any]:
     if not (repo / ".git").exists():
         return {"started": False, "reason": f"research_sync_repo_missing:{repo}", "status": st}
 
-    flags = 0
-    if os.name == "nt":
-        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    flags = _win_no_window()
     log = open(WORKSPACE / "github_sync.log", "a", encoding="utf-8", buffering=1)
     try:
         proc = subprocess.Popen(
@@ -180,7 +183,7 @@ def stop() -> dict[str, Any]:
     if pid and _pid_alive(pid):
         try:
             if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], timeout=10)
+                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], timeout=10, creationflags=_win_no_window())
             else:
                 os.kill(pid, 15)
         except Exception as exc:
