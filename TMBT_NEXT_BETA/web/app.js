@@ -10,7 +10,20 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&
 const iso=t=>{try{return new Date(typeof t==="number"&&t>1e12?t:Number(t)||t).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}catch{return"—"}};
 function log(s){$("#logs").textContent=`[${new Date().toLocaleTimeString()}] ${s}\n`+$("#logs").textContent.slice(0,5000)}
 function toast(s){const e=$("#toast");e.textContent=s;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),2800)}
-function dot(id,cl){$(id).className=cl}
+function dot(id,cl){const el=$(id);if(el)el.className=cl}
+function setWorkspaceView(view){
+ const v=String(view||"desk");
+ document.body.classList.toggle("workspace-page-open",v!=="desk");
+ document.body.dataset.workspaceView=v;
+ $(".workspace-nav [data-workspace-view]").forEach(b=>b.classList.toggle("active",b.dataset.workspaceView===v));
+ $(".workspace-page").forEach(p=>p.classList.toggle("active",p.dataset.workspacePage===v));
+ if(v==="research"||v==="review")pollResearch();
+ if(v==="paper")pollPaper();
+ if(v==="archive")refreshArchive();
+ if(v==="outcomes")refreshOutcomes();
+ if(v==="system")setTimeout(()=>{try{window.tmbtLayoutAudit?.();window.dispatchEvent(new Event("resize"))}catch{}},80);
+ if(v==="desk")setTimeout(draw,40);
+}
 async function api(path){const r=await fetch(path,{cache:"no-store"});if(!r.ok)throw Error(`${r.status} ${path}`);return r.json()}
 function resetChartScale(){state.yZoom=1;state.offset=0;state.futureSpace=0;state.hover=null}
 function setMarket(m){state.market=m;$$(".marketbar button").forEach(b=>b.classList.toggle("active",b.dataset.market===m));state.viewCount=140;resetChartScale();loadBars();loadPD()}
@@ -34,7 +47,7 @@ async function pollResearch(){
    api("/api/research-sync/status").catch(()=>null),
    api("/api/research-scheduler/status").catch(()=>null)
   ]);
-  state.research=d.jobs||[];state.traderNotes=n.text||"";state.researchAutopilot=a;state.researchSync=s;state.researchScheduler=rs;renderResearch();checkResearchAlerts(state.research);
+  state.research=d.jobs||[];state.traderNotes=n.text||"";state.researchAutopilot=a;state.researchSync=s;state.researchScheduler=rs;renderResearch();renderReview();checkResearchAlerts(state.research);
   const j=state.research[0];dot("#researchDot",rs?.running||s?.running||a?.running||j&&String(j.state).toUpperCase()==="RUNNING"?"ok":"warn")
  }catch(e){}
 }
@@ -107,6 +120,33 @@ function renderArchive(){if(!$("#archiveTable"))return;const arr=archiveFiltered
 async function openArchive(hid,sid){const row=state.archive.find(x=>x.history_id===hid);if(!row)return;if(!sid){toast("Für diesen Legacy-Eintrag existiert kein eingefrorener Snapshot.");return}try{const snap=await api(`/api/snapshot?id=${encodeURIComponent(sid)}`);state.snapshot=snap;state.mode="snapshot";state.bars=(snap.bars||[]).map(b=>({t:b.bar_open_ms??b.t,o:Number(b.open??b.o),h:Number(b.high??b.h),l:Number(b.low??b.l),c:Number(b.close??b.c)}));state.offset=0;state.viewCount=Math.min(140,Math.max(40,state.bars.length));state.yZoom=1;state.futureSpace=0;const sm=snap.model||{};state.market=sm.market||row.market||state.market;state.tf=sm.timeframe||row.tf||state.tf;state.selectedModel={id:row.model_id||hid,name:sm.label||row.model,status:sm.stage||row.stage,side:sm.side||row.side,entry:snap.arrays?.entry??row.entry,sl:snap.arrays?.stop??row.sl,tp:snap.arrays?.target??row.tp,rr:snap.arrays?.planned_rr??row.rr,message:sm.message||row.reason,criteria:snap.criteria||row.criteria,logic:snap.logic||row.logic,arrays:snap.arrays||{},validity:snap.validity||{}};$("#snapshotBanner").classList.add("show");$("#snapshotName").textContent=`${state.selectedModel.name} · ${iso(snap.event_time_utc)}`;$("#chartTitle").textContent=`${state.market} · ${state.tf} · Snapshot`;$("#chartSource").textContent=`eingefroren · ${sm.source||row.source||"—"}`;$("#selectedSetup").textContent=state.selectedModel.name;$("#selectedState").textContent=`${state.selectedModel.status} · ${state.selectedModel.side}`;renderInspector(state.selectedModel,snap);$("#chartEmpty").style.display=state.bars.length?"none":"grid";draw();toast("Snapshot geladen")}catch(e){toast("Snapshot konnte nicht geladen werden.");log(String(e))}}
 function backLive(){state.mode="live";state.snapshot=null;$("#snapshotBanner").classList.remove("show");resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
 function renderOutcomes(){const arr=state.outcomes||[];$("#outcomeCards").className="outcome-grid";$("#outcomeCards").innerHTML=arr.length?arr.map(o=>`<div class="outcome-card"><h4>${esc(o.model)}</h4><div class="mini-grid"><div><small>Signals</small><b>${o.signals}</b></div><div><small>Winrate</small><b>${o.winrate==null?"—":fmt(o.winrate,1)+"%"}</b></div><div><small>Net R</small><b class="${o.net_r>0?"good":o.net_r<0?"bad":""}">${fmt(o.net_r,2)}R</b></div><div><small>Expectancy</small><b>${o.expectancy==null?"—":fmt(o.expectancy,2)+"R"}</b></div><div><small>Ø MFE</small><b>${o.avg_mfe==null?"—":fmt(o.avg_mfe,2)+"R"}</b></div><div><small>Ø MAE</small><b>${o.avg_mae==null?"—":fmt(o.avg_mae,2)+"R"}</b></div></div></div>`).join(""):'<div class="empty">Noch keine Outcome-Daten.</div>'}
+function renderReview(){
+ const host=$("#reviewView");if(!host)return;
+ const rs=state.researchScheduler||{},profiles=Object.values(rs.profiles||{});
+ const ready=profiles.filter(p=>String(p.candidate_state||"").toUpperCase()==="READY_FOR_LIVE_REVIEW");
+ if(!ready.length){host.innerHTML='<div class="empty">Noch kein Modell hat die Validation für den Review-Gate bestanden.</div>';return}
+ host.innerHTML='<div class="review-grid">'+ready.map(p=>{
+  const a=p.last_analysis||{},dev=a.development_summary||{},val=a.validation_summary||{},hold=a.holdout||{},good=a.good||[],bad=a.bad||[],next=a.next_steps||[],ov=a.selected_overrides||{};
+  return `<article class="review-card">
+   <div class="review-head"><div><small>${esc(p.profile||"")}</small><h3>${esc(a.label||p.label||p.profile||"Model")}</h3></div><span class="pill signal">READY FOR REVIEW</span></div>
+   <div class="review-metrics">
+    <div><small>Validation Trades</small><b>${val.trades??"—"}</b></div>
+    <div><small>Expectancy</small><b>${val.expectancy_r==null?"—":fmt(val.expectancy_r,3)+"R"}</b></div>
+    <div><small>Profit Factor</small><b>${fmt(val.profit_factor_r,2)}</b></div>
+    <div><small>Max DD</small><b>${val.max_drawdown_r==null?"—":fmt(val.max_drawdown_r,1)+"R"}</b></div>
+   </div>
+   <div class="review-columns">
+    <section><h4>Was funktioniert</h4><ul>${good.map(x=>`<li class="good">${esc(x)}</li>`).join("")||"<li>—</li>"}</ul></section>
+    <section><h4>Risiken / Schwächen</h4><ul>${bad.map(x=>`<li class="bad">${esc(x)}</li>`).join("")||"<li>—</li>"}</ul></section>
+   </div>
+   <section class="review-next"><h4>Nächster Schritt</h4><ul>${next.map(x=>`<li>${esc(x)}</li>`).join("")||"<li>—</li>"}</ul></section>
+   <details><summary>Development vs Validation</summary><div class="model-row"><small>Development: ${dev.trades??"—"} Trades · Exp ${fmt(dev.expectancy_r,3)}R · PF ${fmt(dev.profit_factor_r,2)} · DD ${fmt(dev.max_drawdown_r,1)}R</small><small>Validation: ${val.trades??"—"} Trades · Exp ${fmt(val.expectancy_r,3)}R · PF ${fmt(val.profit_factor_r,2)} · DD ${fmt(val.max_drawdown_r,1)}R</small></div></details>
+   <details><summary>Gewählte Parameter</summary><pre>${esc(JSON.stringify(ov,null,2))}</pre></details>
+   <div class="review-gate-note">Holdout/OOS bleibt gesperrt. Keine automatische Live-Freigabe.</div>
+  </article>`
+ }).join("")+'</div>';
+}
+
 function renderResearch(){
  const arr=state.research||[],a=state.researchAutopilot||{},profiles=a.available_profiles||{},rs=state.researchScheduler||{};
  const opts=Object.entries(profiles).filter(([k])=>k!=="_error").map(([k,v])=>`<option value="${esc(k)}" ${String(a.profile||"")==k?"selected":""}>${esc(v.label||k)}</option>`).join("");
@@ -167,10 +207,10 @@ function dragStart(e){const rect=$("#chart").getBoundingClientRect(),g=chartGeom
 function dragMove(e){if(!state.drag)return;const host=$("#chartHost");if(state.drag.mode==="price"){const dy=e.clientY-state.drag.y;state.yZoom=Math.max(.2,Math.min(8,state.drag.zoom*Math.exp(dy*.008)))}else if(state.drag.mode==="time"){const dx=e.clientX-state.drag.x;state.viewCount=Math.max(20,Math.min(500,Math.round(state.drag.count*Math.exp(-dx*.007))));const maxFuture=Math.max(8,Math.round(state.viewCount*.35)),maxPast=Math.max(0,state.bars.length-Math.min(state.viewCount,state.bars.length));state.offset=Math.max(-maxFuture,Math.min(maxPast,state.drag.offset))}else{const pxPer=Math.max(2,(host.clientWidth-72)/Math.max(1,state.viewCount)),delta=Math.round((e.clientX-state.drag.x)/pxPer),maxFuture=Math.max(8,Math.round(state.viewCount*.35)),maxPast=Math.max(0,state.bars.length-Math.min(state.viewCount,state.bars.length));state.offset=Math.max(-maxFuture,Math.min(maxPast,state.drag.offset+delta))}draw()}
 function dragEnd(){state.drag=null;$("#chart").style.cursor="crosshair"}
 function fit(){state.offset=0;state.futureSpace=0;state.viewCount=Math.min(140,Math.max(40,state.bars.length));state.yZoom=1;draw()}
-function setupSplit(id,varName,type){const el=$(id);let start,initial;el.onmousedown=e=>{e.preventDefault();start=type==="h"?e.clientY:e.clientX;initial=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(varName));const move=ev=>{let v=initial;if(varName==="--left")v+=ev.clientX-start;if(varName==="--right")v-=ev.clientX-start;if(varName==="--bottom")v-=ev.clientY-start;v=Math.max(varName==="--bottom"?40:0,Math.min(varName==="--bottom"?520:560,v));document.documentElement.style.setProperty(varName,v+"px");draw()};const up=()=>{document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up)};document.addEventListener("mousemove",move);document.addEventListener("mouseup",up)}}
-$$(".marketbar button").forEach(b=>b.onclick=()=>setMarket(b.dataset.market));$$(".tfbar button").forEach(b=>b.onclick=()=>setTF(b.dataset.tf));$$(".quotes>div").forEach(d=>d.onclick=()=>setMarket(d.dataset.goto));$$(".bottom-tabs button[data-tab]").forEach(b=>b.onclick=()=>{$$(".bottom-tabs button[data-tab]").forEach(x=>x.classList.toggle("active",x===b));$$(".tab").forEach(t=>t.classList.remove("active"));$("#tab-"+b.dataset.tab).classList.add("active");if(b.dataset.tab==="archive")refreshArchive();if(b.dataset.tab==="outcomes")refreshOutcomes();if(b.dataset.tab==="paper")pollPaper();if(b.dataset.tab==="research")pollResearch()});
-$("#archiveSearch").oninput=renderArchive;$("#archiveStage").onchange=renderArchive;$("#backLive").onclick=backLive;$("#liveModeBtn").onclick=backLive;$("#fitBtn").onclick=fit;$("#pdBtn").onclick=()=>{state.pdOn=!state.pdOn;$("#pdBtn").classList.toggle("active",state.pdOn);draw()};$("#sessionsBtn").onclick=()=>{state.sessions=!state.sessions;$("#sessionsBtn").classList.toggle("active",state.sessions);draw()};$("#leftHide").onclick=()=>{document.body.classList.toggle("left-collapsed");setTimeout(draw,30)};$("#rightHide").onclick=()=>{document.body.classList.toggle("right-collapsed");setTimeout(draw,30)};$("#bottomHide").onclick=()=>{document.body.classList.toggle("bottom-collapsed");setTimeout(draw,30)};
+function setupSplit(id,varName,type){const el=$(id);if(!el)return;let start,initial;el.onmousedown=e=>{e.preventDefault();start=type==="h"?e.clientY:e.clientX;initial=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(varName));const move=ev=>{let v=initial;if(varName==="--left")v+=ev.clientX-start;if(varName==="--right")v-=ev.clientX-start;if(varName==="--bottom")v-=ev.clientY-start;v=Math.max(varName==="--bottom"?40:0,Math.min(varName==="--bottom"?520:560,v));document.documentElement.style.setProperty(varName,v+"px");draw()};const up=()=>{document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up)};document.addEventListener("mousemove",move);document.addEventListener("mouseup",up)}}
+$(".marketbar button").forEach(b=>b.onclick=()=>setMarket(b.dataset.market));$(".tfbar button").forEach(b=>b.onclick=()=>setTF(b.dataset.tf));$(".quotes>div").forEach(d=>d.onclick=()=>setMarket(d.dataset.goto));$(".workspace-nav [data-workspace-view]").forEach(b=>b.onclick=()=>setWorkspaceView(b.dataset.workspaceView));
+$("#archiveSearch").oninput=renderArchive;$("#archiveStage").onchange=renderArchive;$("#backLive").onclick=backLive;$("#liveModeBtn").onclick=backLive;$("#fitBtn").onclick=fit;$("#pdBtn").onclick=()=>{state.pdOn=!state.pdOn;$("#pdBtn").classList.toggle("active",state.pdOn);draw()};$("#sessionsBtn").onclick=()=>{state.sessions=!state.sessions;$("#sessionsBtn").classList.toggle("active",state.sessions);draw()};$("#leftHide").onclick=()=>{document.body.classList.toggle("left-collapsed");setTimeout(draw,30)};$("#rightHide").onclick=()=>{document.body.classList.toggle("right-collapsed");setTimeout(draw,30)};if($("#bottomHide"))$("#bottomHide").onclick=()=>{document.body.classList.toggle("bottom-collapsed");setTimeout(draw,30)};
 $("#alertsBtn").onclick=async()=>{if(!("Notification" in window)){toast("Browser unterstützt keine Notifications.");return}const p=await Notification.requestPermission();state.alerts=p==="granted";$("#alertsBtn").classList.toggle("active",state.alerts);toast(state.alerts?"Alerts aktiviert":"Alerts nicht erlaubt")};
 const cv=$("#chart");cv.addEventListener("mousemove",chartMouse);cv.addEventListener("mouseleave",()=>{if(!state.drag){state.hover=null;cv.style.cursor="crosshair";draw()}});cv.addEventListener("wheel",wheel,{passive:false});cv.addEventListener("mousedown",dragStart);cv.addEventListener("dblclick",fit);window.addEventListener("mousemove",dragMove);window.addEventListener("mouseup",dragEnd);window.addEventListener("resize",draw);
-setupSplit("#splitLeft","--left","v");setupSplit("#splitRight","--right","v");setupSplit("#splitBottom","--bottom","h");
-bootstrap();loadBars();loadPD();setInterval(pollModels,2500);setInterval(()=>{if(state.mode==="live")loadBars()},5000);setInterval(pollResearch,5000);setInterval(pollPaper,5000);setInterval(()=>{refreshArchive();refreshOutcomes()},15000);
+setupSplit("#splitLeft","--left","v");setupSplit("#splitRight","--right","v");
+setWorkspaceView("desk");bootstrap();loadBars();loadPD();setInterval(pollModels,2500);setInterval(()=>{if(state.mode==="live")loadBars()},5000);setInterval(pollResearch,5000);setInterval(pollPaper,5000);setInterval(()=>{refreshArchive();refreshOutcomes()},15000);
