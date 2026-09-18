@@ -301,6 +301,35 @@ def activate() -> dict[str, Any]:
 
     research_autopilot = importlib.import_module("research_autopilot")
 
+    def full_history_splits(file_index):
+        """Use the complete available market history without hard-coded calendar years.
+
+        70% development / 15% locked validation / 15% untouched holdout, split
+        by actual available trading dates. This keeps point-in-time research
+        discipline while allowing old history (e.g. 2010+) to participate.
+        """
+        if not file_index:
+            raise ValueError("no_market_data")
+        dates = sorted(file_index)
+        n = len(dates)
+        if n < 60:
+            raise ValueError("not_enough_days_for_autopilot")
+        i70 = max(1, min(n - 2, int(n * 0.70)))
+        i85 = max(i70 + 1, min(n - 1, int(n * 0.85)))
+        return {
+            "full_start": dates[0].isoformat(),
+            "full_end": dates[-1].isoformat(),
+            "development_start": dates[0].isoformat(),
+            "development_end": dates[i70 - 1].isoformat(),
+            "validation_start": dates[i70].isoformat(),
+            "validation_end": dates[i85 - 1].isoformat(),
+            "holdout_start": dates[i85].isoformat() if i85 < n else None,
+            "holdout_end": dates[-1].isoformat() if i85 < n else None,
+            "split_mode": "full-history-70-15-15-v1",
+        }
+
+    research_autopilot._default_splits = full_history_splits
+
     # Add the true-futures presets beside the migrated legacy presets so every
     # original profile remains usable from the compatibility runtime.
     preset_dir = root / "presets"
