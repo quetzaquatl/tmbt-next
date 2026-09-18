@@ -107,7 +107,15 @@ def status() -> dict[str, Any]:
     return st
 
 
-def start(profile: str, *, test_news: bool = True, tick_audit: bool = False) -> dict[str, Any]:
+def start(
+    profile: str,
+    *,
+    test_news: bool = True,
+    tick_audit: bool = False,
+    optimizer_overrides: list[dict[str, Any]] | None = None,
+    cycle_round: int | None = None,
+    requested_by: str = "TMBT Next",
+) -> dict[str, Any]:
     st = status()
     if st.get("running"):
         return {"started": False, "reason": "already_running", "status": st}
@@ -125,7 +133,9 @@ def start(profile: str, *, test_news: bool = True, tick_audit: bool = False) -> 
         # Databento purchase is OHLCV-1m. Do not claim tick-exact validation.
         "tick_audit": bool(tick_audit),
         "requested_at_utc": datetime.now(timezone.utc).isoformat(),
-        "requested_by": "TMBT Next",
+        "requested_by": requested_by,
+        "cycle_round": cycle_round,
+        "optimizer_overrides": optimizer_overrides or [],
     }
     _write_json(request_path(), request)
 
