@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import legacy_runtime
+import legacy_research_adapter
 
 HERE = Path(__file__).resolve().parent
 
@@ -127,9 +128,13 @@ def start(
     legacy_runtime.ensure_runtime()
     root().mkdir(parents=True, exist_ok=True)
     cancel_path().unlink(missing_ok=True)
+    news = legacy_research_adapter.news_status()
+    effective_test_news = bool(test_news and news.get("ready"))
     request = {
         "profile": profile,
-        "test_news": bool(test_news),
+        "test_news_requested": bool(test_news),
+        "test_news": effective_test_news,
+        "news_status": news,
         # Databento purchase is OHLCV-1m. Do not claim tick-exact validation.
         "tick_audit": bool(tick_audit),
         "requested_at_utc": datetime.now(timezone.utc).isoformat(),
