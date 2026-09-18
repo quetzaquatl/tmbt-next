@@ -22,7 +22,7 @@ MASSIVE_PID = HERE / "massive_futures.pid"
 CHECK_SECONDS = max(15, int(os.environ.get("TMBT_FEED_GUARDIAN_SECONDS", "30")))
 RESTART_COOLDOWN = max(60, int(os.environ.get("TMBT_FEED_RESTART_COOLDOWN", "120")))
 DISCONNECTED_GRACE = max(60, int(os.environ.get("TMBT_FEED_DISCONNECTED_GRACE", "180")))
-GUARDIAN_GENERATION = "fast-twelve-v3"
+GUARDIAN_GENERATION = "fast-twelve-v4"
 
 _last_twelve_start = 0.0
 _last_massive_start = 0.0
