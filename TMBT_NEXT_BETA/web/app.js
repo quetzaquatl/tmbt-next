@@ -120,13 +120,81 @@ function renderArchive(){if(!$("#archiveTable"))return;const arr=archiveFiltered
 async function openArchive(hid,sid){const row=state.archive.find(x=>x.history_id===hid);if(!row)return;if(!sid){toast("Für diesen Legacy-Eintrag existiert kein eingefrorener Snapshot.");return}try{const snap=await api(`/api/snapshot?id=${encodeURIComponent(sid)}`);state.snapshot=snap;state.mode="snapshot";state.bars=(snap.bars||[]).map(b=>({t:b.bar_open_ms??b.t,o:Number(b.open??b.o),h:Number(b.high??b.h),l:Number(b.low??b.l),c:Number(b.close??b.c)}));state.offset=0;state.viewCount=Math.min(140,Math.max(40,state.bars.length));state.yZoom=1;state.futureSpace=0;const sm=snap.model||{};state.market=sm.market||row.market||state.market;state.tf=sm.timeframe||row.tf||state.tf;state.selectedModel={id:row.model_id||hid,name:sm.label||row.model,status:sm.stage||row.stage,side:sm.side||row.side,entry:snap.arrays?.entry??row.entry,sl:snap.arrays?.stop??row.sl,tp:snap.arrays?.target??row.tp,rr:snap.arrays?.planned_rr??row.rr,message:sm.message||row.reason,criteria:snap.criteria||row.criteria,logic:snap.logic||row.logic,arrays:snap.arrays||{},validity:snap.validity||{}};$("#snapshotBanner").classList.add("show");$("#snapshotName").textContent=`${state.selectedModel.name} · ${iso(snap.event_time_utc)}`;$("#chartTitle").textContent=`${state.market} · ${state.tf} · Snapshot`;$("#chartSource").textContent=`eingefroren · ${sm.source||row.source||"—"}`;$("#selectedSetup").textContent=state.selectedModel.name;$("#selectedState").textContent=`${state.selectedModel.status} · ${state.selectedModel.side}`;renderInspector(state.selectedModel,snap);$("#chartEmpty").style.display=state.bars.length?"none":"grid";draw();toast("Snapshot geladen")}catch(e){toast("Snapshot konnte nicht geladen werden.");log(String(e))}}
 function backLive(){state.mode="live";state.snapshot=null;$("#snapshotBanner").classList.remove("show");resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
 function renderOutcomes(){const arr=state.outcomes||[];$("#outcomeCards").className="outcome-grid";$("#outcomeCards").innerHTML=arr.length?arr.map(o=>`<div class="outcome-card"><h4>${esc(o.model)}</h4><div class="mini-grid"><div><small>Signals</small><b>${o.signals}</b></div><div><small>Winrate</small><b>${o.winrate==null?"—":fmt(o.winrate,1)+"%"}</b></div><div><small>Net R</small><b class="${o.net_r>0?"good":o.net_r<0?"bad":""}">${fmt(o.net_r,2)}R</b></div><div><small>Expectancy</small><b>${o.expectancy==null?"—":fmt(o.expectancy,2)+"R"}</b></div><div><small>Ø MFE</small><b>${o.avg_mfe==null?"—":fmt(o.avg_mfe,2)+"R"}</b></div><div><small>Ø MAE</small><b>${o.avg_mae==null?"—":fmt(o.avg_mae,2)+"R"}</b></div></div></div>`).join(""):'<div class="empty">Noch keine Outcome-Daten.</div>'}
+function perfMoney(v){
+ const n=Number(v);if(!Number.isFinite(n))return"—";
+ try{return new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(n)}catch{return n.toFixed(2)+" €"}
+}
+function perfPct(v,d=2){const n=Number(v);return Number.isFinite(n)?n.toFixed(d)+"%":"—"}
+function perfNum(v,d=2){const n=Number(v);return Number.isFinite(n)?n.toFixed(d):"—"}
+function perfEquitySvg(perf){
+ const curve=perf?.equity_curve||[];if(curve.length<2)return'<div class="perf-chart-empty">Keine Equity-Daten verfügbar.</div>';
+ const w=1000,h=230,p=30,vals=curve.map(x=>Number(x.balance_eur)).filter(Number.isFinite);
+ let lo=Math.min(...vals),hi=Math.max(...vals);if(!(hi>lo)){hi=lo+1}
+ const pad=(hi-lo)*.08;lo-=pad;hi+=pad;
+ const sx=i=>p+(w-2*p)*(i/Math.max(1,curve.length-1)),sy=v=>p+(h-2*p)*(1-(v-lo)/(hi-lo));
+ const pts=curve.map((x,i)=>`${sx(i).toFixed(1)},${sy(Number(x.balance_eur)).toFixed(1)}`).join(" ");
+ const start=Number(curve[0].balance_eur),end=Number(curve.at(-1).balance_eur),startY=sy(start);
+ const ticks=[0,.25,.5,.75,1].map(f=>{const v=lo+(hi-lo)*(1-f),y=p+(h-2*p)*f;return`<line x1="${p}" y1="${y}" x2="${w-p}" y2="${y}" class="perf-gridline"/><text x="4" y="${y+4}" class="perf-axis">${esc(perfMoney(v))}</text>`}).join("");
+ return`<div class="perf-chart"><div class="perf-chart-head"><div><b>Equity Curve</b><small>${esc(perfMoney(start))} → ${esc(perfMoney(end))}</small></div><span>${curve.length-1} Trades</span></div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Equity curve">${ticks}<line x1="${p}" y1="${startY}" x2="${w-p}" y2="${startY}" class="perf-startline"/><polyline points="${pts}" class="perf-equity-line"/></svg></div>`;
+}
+function perfDrawdownSvg(perf){
+ const curve=perf?.equity_curve||[];if(curve.length<2)return"";
+ const w=1000,h=130,p=26,vals=curve.map(x=>Number(x.drawdown_pct)||0),max=Math.max(1,...vals);
+ const sx=i=>p+(w-2*p)*(i/Math.max(1,curve.length-1)),sy=v=>p+(h-2*p)*(v/max);
+ const pts=curve.map((x,i)=>`${sx(i).toFixed(1)},${sy(Number(x.drawdown_pct)||0).toFixed(1)}`).join(" ");
+ return`<div class="perf-chart drawdown"><div class="perf-chart-head"><div><b>Drawdown</b><small>max ${perfPct(perf?.metrics?.max_drawdown_pct,2)}</small></div></div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><line x1="${p}" y1="${p}" x2="${w-p}" y2="${p}" class="perf-gridline"/><polyline points="${pts}" class="perf-dd-line"/></svg></div>`;
+}
+function perfTableRows(rows,kind){
+ if(!Array.isArray(rows)||!rows.length)return'<tr><td colspan="4" class="muted">—</td></tr>';
+ if(kind==="side")return rows.map(x=>`<tr><td>${esc(x.side)}</td><td>${x.trades??0}</td><td>${perfPct(x.winrate_pct,1)}</td><td>${perfNum(x.net_r,2)}R</td><td>${perfNum(x.expectancy_r,3)}R</td></tr>`).join("");
+ if(kind==="exit")return rows.map(x=>`<tr><td>${esc(x.reason)}</td><td>${x.trades??0}</td><td>${perfPct(x.winrate_pct,1)}</td><td>${perfNum(x.net_r,2)}R</td></tr>`).join("");
+ return rows.slice(-24).map(x=>`<tr><td>${esc(x.month)}</td><td>${x.trades??0}</td><td>${perfNum(x.net_r,2)}R</td><td>${perfPct(x.winrate_pct,1)}</td><td>${perfNum(x.expectancy_r,3)}R</td></tr>`).join("");
+}
+function performanceDetail(perf,label="Validation",open=true){
+ if(!perf?.available)return`<details class="performance-report" ${open?"open":""}><summary>${esc(label)} · Performance</summary><div class="empty">Detaildaten nicht verfügbar${perf?.reason?" · "+esc(perf.reason):""}.</div></details>`;
+ const m=perf.metrics||{},best=perf.best_trade||{},worst=perf.worst_trade||{},acc=perf.accounting||{};
+ return`<details class="performance-report" ${open?"open":""}>
+  <summary><b>${esc(label)} · MetaTrader-Style Auswertung</b><span>${m.trades??0} Trades · ${perfMoney(m.start_balance_eur)} Start</span></summary>
+  <div class="perf-account-note">Kontosimulation: <b>${perfMoney(acc.start_balance_eur)}</b> Start · <b>${perfPct(acc.risk_pct_per_r,2)}</b> Risiko je 1R, auf aktuelle Equity gerechnet. Nur Reporting – verändert keine Entry-/Model-Logik.</div>
+  <div class="perf-metric-grid">
+   <div><small>End Balance</small><b>${perfMoney(m.end_balance_eur)}</b></div>
+   <div><small>Net Profit</small><b class="${Number(m.net_profit_eur)>=0?"good":"bad"}">${perfMoney(m.net_profit_eur)}</b></div>
+   <div><small>Return</small><b>${perfPct(m.return_pct,2)}</b></div>
+   <div><small>Profit Factor</small><b>${perfNum(m.profit_factor,2)}</b></div>
+   <div><small>Expectancy</small><b>${perfNum(m.expectancy_r,3)}R</b></div>
+   <div><small>Win Rate</small><b>${perfPct(m.winrate_pct,1)}</b></div>
+   <div><small>Net R</small><b>${perfNum(m.net_r,2)}R</b></div>
+   <div><small>Max DD</small><b>${perfMoney(m.max_drawdown_eur)} · ${perfPct(m.max_drawdown_pct,2)}</b></div>
+   <div><small>Avg Win</small><b>${perfNum(m.avg_win_r,3)}R</b></div>
+   <div><small>Avg Loss</small><b>${perfNum(m.avg_loss_r,3)}R</b></div>
+   <div><small>Median Trade</small><b>${perfNum(m.median_r,3)}R</b></div>
+   <div><small>Recovery Factor</small><b>${perfNum(m.recovery_factor,2)}</b></div>
+   <div><small>Max Win Streak</small><b>${m.max_consecutive_wins??"—"}</b></div>
+   <div><small>Max Loss Streak</small><b>${m.max_consecutive_losses??"—"}</b></div>
+   <div><small>Avg Planned RR</small><b>${perfNum(m.avg_planned_rr,2)}R</b></div>
+   <div><small>Avg Hold</small><b>${perfNum(m.avg_hold_minutes,0)} min</b></div>
+  </div>
+  <div class="perf-chart-grid">${perfEquitySvg(perf)}${perfDrawdownSvg(perf)}</div>
+  <div class="perf-best-worst">
+   <div><small>Highest Win</small><b class="good">${perfNum(best.r,3)}R · ${perfMoney(best.pnl_eur)}</b><span>${esc(best.side||"")} · ${esc(best.exit_reason||"")} · ${esc(best.exit_time||"")}</span></div>
+   <div><small>Highest Loss</small><b class="bad">${perfNum(worst.r,3)}R · ${perfMoney(worst.pnl_eur)}</b><span>${esc(worst.side||"")} · ${esc(worst.exit_reason||"")} · ${esc(worst.exit_time||"")}</span></div>
+   <div><small>Avg MFE / MAE</small><b>${perfNum(m.avg_mfe_r,2)}R / ${perfNum(m.avg_mae_r,2)}R</b><span>Trade excursion</span></div>
+   <div><small>Gross Profit / Loss</small><b>${perfMoney(m.gross_profit_eur)} / ${perfMoney(m.gross_loss_eur)}</b><span>${perfNum(m.gross_profit_r,1)}R / ${perfNum(m.gross_loss_r,1)}R</span></div>
+  </div>
+  <div class="perf-tables">
+   <section><h4>Long / Short</h4><table class="table compact"><thead><tr><th>Side</th><th>Trades</th><th>WR</th><th>Net</th><th>Exp</th></tr></thead><tbody>${perfTableRows(perf.sides,"side")}</tbody></table></section>
+   <section><h4>Exit Reasons</h4><table class="table compact"><thead><tr><th>Exit</th><th>Trades</th><th>WR</th><th>Net</th></tr></thead><tbody>${perfTableRows(perf.exit_reasons,"exit")}</tbody></table></section>
+  </div>
+  <details class="perf-monthly"><summary>Monatliche Performance</summary><table class="table compact"><thead><tr><th>Monat</th><th>Trades</th><th>Net</th><th>WR</th><th>Exp</th></tr></thead><tbody>${perfTableRows(perf.monthly,"month")}</tbody></table></details>
+ </details>`;
+}
 function renderReview(){
  const host=$("#reviewView");if(!host)return;
  const rs=state.researchScheduler||{},profiles=Object.values(rs.profiles||{});
  const ready=profiles.filter(p=>String(p.candidate_state||"").toUpperCase()==="READY_FOR_LIVE_REVIEW");
  if(!ready.length){host.innerHTML='<div class="empty">Noch kein Modell hat die Validation für den Review-Gate bestanden.</div>';return}
  host.innerHTML='<div class="review-grid">'+ready.map(p=>{
-  const a=p.last_analysis||{},dev=a.development_summary||{},val=a.validation_summary||{},hold=a.holdout||{},good=a.good||[],bad=a.bad||[],next=a.next_steps||[],ov=a.selected_overrides||{};
+  const a=p.last_analysis||{},dev=a.development_summary||{},val=a.validation_summary||{},good=a.good||[],bad=a.bad||[],next=a.next_steps||[],ov=a.selected_overrides||{},perf=a.performance||{};
   return `<article class="review-card">
    <div class="review-head"><div><small>${esc(p.profile||"")}</small><h3>${esc(a.label||p.label||p.profile||"Model")}</h3></div><span class="pill signal">READY FOR REVIEW</span></div>
    <div class="review-metrics">
@@ -135,6 +203,9 @@ function renderReview(){
     <div><small>Profit Factor</small><b>${fmt(val.profit_factor_r,2)}</b></div>
     <div><small>Max DD</small><b>${val.max_drawdown_r==null?"—":fmt(val.max_drawdown_r,1)+"R"}</b></div>
    </div>
+   ${performanceDetail(perf.validation,"Validation",true)}
+   ${performanceDetail(perf.development,"Optimiertes Development",false)}
+   ${performanceDetail(perf.baseline,"Development Baseline",false)}
    <div class="review-columns">
     <section><h4>Was funktioniert</h4><ul>${good.map(x=>`<li class="good">${esc(x)}</li>`).join("")||"<li>—</li>"}</ul></section>
     <section><h4>Risiken / Schwächen</h4><ul>${bad.map(x=>`<li class="bad">${esc(x)}</li>`).join("")||"<li>—</li>"}</ul></section>
@@ -163,9 +234,9 @@ function renderResearch(){
   :`Historische News: NICHT GELADEN · News-Varianten werden übersprungen`;
 
  const reportHtml=p=>{
-  const x=p?.last_analysis||{},dev=x.development_summary||{},val=x.validation_summary||{},good=x.good||[],bad=x.bad||[],next=x.next_steps||[],ov=x.selected_overrides||{};
+  const x=p?.last_analysis||{},dev=x.development_summary||{},val=x.validation_summary||{},good=x.good||[],bad=x.bad||[],next=x.next_steps||[],ov=x.selected_overrides||{},perf=x.performance||{};
   if(!x.profile)return"";
-  return`<details class="research-card"><summary><b>Bericht · ${esc(x.label||x.profile)}</b> <span class="pill ${String(x.verdict||"idle").toLowerCase()}">${esc(x.verdict||"—")}</span></summary><div class="model-row"><small>Development: Trades ${dev.trades??"—"} · Exp ${fmt(dev.expectancy_r,3)}R · PF ${fmt(dev.profit_factor_r,2)} · DD ${fmt(dev.max_drawdown_r,1)}R</small><small>Validation: Trades ${val.trades??"—"} · Exp ${fmt(val.expectancy_r,3)}R · PF ${fmt(val.profit_factor_r,2)} · DD ${fmt(val.max_drawdown_r,1)}R</small></div><h4>Gut</h4><ul>${good.map(v=>`<li class="good">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Schlecht / Risiken</h4><ul>${bad.map(v=>`<li class="bad">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Nächster Schritt</h4><ul>${next.map(v=>`<li>${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><details><summary>Gewählte Parameter</summary><pre>${esc(JSON.stringify(ov,null,2))}</pre></details></details>`;
+  return`<details class="research-card"><summary><b>Bericht · ${esc(x.label||x.profile)}</b> <span class="pill ${String(x.verdict||"idle").toLowerCase()}">${esc(x.verdict||"—")}</span></summary><div class="model-row"><small>Development: Trades ${dev.trades??"—"} · Exp ${fmt(dev.expectancy_r,3)}R · PF ${fmt(dev.profit_factor_r,2)} · DD ${fmt(dev.max_drawdown_r,1)}R</small><small>Validation: Trades ${val.trades??"—"} · Exp ${fmt(val.expectancy_r,3)}R · PF ${fmt(val.profit_factor_r,2)} · DD ${fmt(val.max_drawdown_r,1)}R</small></div>${performanceDetail(perf.validation,"Validation",false)}<h4>Gut</h4><ul>${good.map(v=>`<li class="good">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Schlecht / Risiken</h4><ul>${bad.map(v=>`<li class="bad">${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><h4>Nächster Schritt</h4><ul>${next.map(v=>`<li>${esc(v)}</li>`).join("")||"<li>—</li>"}</ul><details><summary>Gewählte Parameter</summary><pre>${esc(JSON.stringify(ov,null,2))}</pre></details></details>`;
  };
  const rp=rs.profiles||{};
  const reports=Object.values(rp).filter(p=>p?.last_analysis?.profile).map(reportHtml).join("");
