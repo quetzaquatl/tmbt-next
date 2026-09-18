@@ -37,15 +37,29 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
-def _cache_ready(subs: list[dict[str, Any]]) -> bool:
-    root = WORKSPACE / "live_data" / "twelve"
-    if not root.exists():
+def _cache_ready(tl, subs: list[dict[str, Any]]) -> bool:
+    # The migrated Twelve collector writes bars into tradingview_live.sqlite3,
+    # not into per-market JSON files. The first fast-collector version checked
+    # for JSON mirrors that do not exist, so every restart fell back to the full
+    # 15-request multi-timeframe backfill.
+    db = WORKSPACE / "live_data" / "tradingview_live.sqlite3"
+    if not db.exists():
         return False
     for sub in subs:
         alias = str(sub.get("alias") or sub.get("symbol") or "DATA").upper()
-        p = root / f"{alias}_5m.json"
-        x = _read_json(p)
-        if not isinstance(x.get("bars"), list) or not x.get("bars"):
+        symbol = str(sub.get("symbol") or "").strip()
+        try:
+            rows = tl.get_bars(
+                WORKSPACE,
+                source="twelve",
+                market=alias,
+                tickerid=f"TWELVE:{symbol}",
+                timeframe="5m",
+                limit=1,
+            )
+        except Exception:
+            return False
+        if not rows:
             return False
     return True
 
@@ -64,7 +78,7 @@ def _fast_run(tl) -> None:
     # First-ever setup still uses the audited legacy full backfill. Once a local
     # mirror exists, restarts use only three 5m catch-up requests and rebuild
     # higher TFs locally. This avoids 15-request startup backfills every reboot.
-    if not _cache_ready(subs):
+    if not _cache_ready(tl, subs):
         tl._run_connector(WORKSPACE)
         return
 
