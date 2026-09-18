@@ -217,17 +217,36 @@ def _live_research_job() -> dict[str, Any]:
 
 def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
     auto = research_autopilot_bridge.status()
-    profile = str(auto.get("profile") or _read_json(STATUS).get("active_profile") or "")
+    scheduler_status = _read_json(STATUS)
+    scheduler_pid = int(scheduler_status.get("pid") or 0)
+    scheduler_running = bool(scheduler_status.get("running") and _pid_alive(scheduler_pid))
+    auto_running = bool(auto.get("running"))
+
+    configured_profiles = [str(x) for x in (cfg.get("profiles") or [])]
+    profile = str(auto.get("profile") or scheduler_status.get("active_profile") or "")
+
+    # A finished autopilot leaves its last profile/stage in status.json. Do not
+    # present that stale state as if it were the current matrix job.
+    if not auto_running and not scheduler_status.get("active_profile"):
+        profile = ""
+        matrix_state = (_read_json(PROFILE_STATE).get("profiles") or {})
+        generation = str(cfg.get("matrix_generation") or MATRIX_GENERATION)
+        for candidate in configured_profiles:
+            item = matrix_state.get(candidate) or {}
+            if str(item.get("matrix_generation") or "") != generation:
+                profile = candidate
+                break
+
     profiles = research_autopilot_bridge.profiles()
     p = profiles.get(profile) or {}
     optimizers = list(p.get("optimizers") or [])
     news = legacy_research_adapter.news_status()
     use_news = bool(cfg.get("test_news", True) and news.get("ready"))
     total = 1 + len(optimizers) + 1 + (3 if use_news else 0) + 1 + 1
-    stage = str(auto.get("stage") or "")
-    message = str(auto.get("message") or "")
+    stage = str(auto.get("stage") or "") if auto_running else ""
+    message = str(auto.get("message") or "") if auto_running else ""
     step = 0
-    label = "Wartet"
+    label = "Wartet auf Scheduler" if scheduler_running else "Scheduler gestoppt"
 
     if stage == "baseline":
         step, label = 1, "Development Baseline"
@@ -273,12 +292,18 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
         "step": step,
         "total": total,
         "pct": pct,
-        "running": bool(auto.get("running")),
+        "running": bool(auto_running or scheduler_running),
+        "autopilot_running": auto_running,
+        "scheduler_running": scheduler_running,
+        "scheduler_state": scheduler_status.get("state"),
         "message": message,
         "news_tests_enabled": use_news,
         "live_job": live_job,
-        "matrix_index": int(_read_json(STATUS).get("matrix_index") or 0),
-        "matrix_total": int(_read_json(STATUS).get("matrix_total") or len(cfg.get("profiles") or [])),
+        "matrix_index": int(
+            scheduler_status.get("matrix_index")
+            or ((configured_profiles.index(profile) + 1) if profile in configured_profiles else 0)
+        ),
+        "matrix_total": int(scheduler_status.get("matrix_total") or len(configured_profiles)),
         "matrix_generation": str(cfg.get("matrix_generation") or MATRIX_GENERATION),
     }
 
