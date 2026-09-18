@@ -13,6 +13,7 @@ import research_autopilot_bridge
 import research_sync_bridge
 import research_scheduler
 import smt_trade_management
+import ttfm_live
 import server_ready as ready
 
 core = ready.core
@@ -179,6 +180,11 @@ def context_locked_models():
     models = _apply_market_context(models, "NQ")
     models = _apply_market_context(models, "ES")
 
+    # TTFM is monitored operationally, but remains execution-locked until its
+    # research profile passes the manual review gate. The live evaluator uses
+    # true NQ/ES/GC futures only and never substitutes QQQ/SPY/XAU.
+    models.extend(ttfm_live.build_monitor_models(core.WORKSPACE))
+
     active = {}
     for m in models:
         if not _is_ifvg(m) or _stage(m) not in _ACTIVE:
@@ -207,7 +213,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.51-beta-ote-lifecycle-fix"
+core.APP_VERSION = "0.9.52-beta-ttfm-live-monitor"
 
 
 class Handler(ready.Handler):
