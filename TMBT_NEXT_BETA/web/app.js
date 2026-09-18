@@ -25,6 +25,27 @@ function setWorkspaceView(view){
  if(v==="desk")setTimeout(draw,40);
 }
 async function api(path){const r=await fetch(path,{cache:"no-store"});if(!r.ok)throw Error(`${r.status} ${path}`);return r.json()}
+function detailsStateKey(el){
+ const parts=[];let cur=el;
+ while(cur&&cur.tagName==="DETAILS"){
+  const s=cur.querySelector(":scope > summary");
+  parts.unshift(String(s?.textContent||"details").replace(/\s+/g," ").trim());
+  cur=cur.parentElement?.closest("details");
+ }
+ return parts.join(" › ");
+}
+function preserveDetailsHTML(host,html){
+ if(!host)return;
+ const stateMap=new Map();
+ host.querySelectorAll("details").forEach((d,i)=>stateMap.set(detailsStateKey(d)||String(i),!!d.open));
+ const scroller=host.closest(".page-scroll"),scrollTop=scroller?.scrollTop??0;
+ host.innerHTML=html;
+ host.querySelectorAll("details").forEach((d,i)=>{
+  const key=detailsStateKey(d)||String(i);
+  if(stateMap.has(key))d.open=stateMap.get(key);
+ });
+ if(scroller)requestAnimationFrame(()=>{scroller.scrollTop=scrollTop});
+}
 function resetChartScale(){state.yZoom=1;state.offset=0;state.futureSpace=0;state.hover=null}
 function setMarket(m){state.market=m;$$(".marketbar button").forEach(b=>b.classList.toggle("active",b.dataset.market===m));state.viewCount=140;resetChartScale();loadBars();loadPD()}
 function setTF(tf){state.tf=tf;$$(".tfbar button").forEach(b=>b.classList.toggle("active",b.dataset.tf===tf));state.viewCount=140;resetChartScale();loadBars()}
@@ -315,8 +336,8 @@ function renderReview(){
  const host=$("#reviewView");if(!host)return;
  const rs=state.researchScheduler||{},profiles=Object.values(rs.profiles||{});
  const ready=profiles.filter(p=>String(p.candidate_state||"").toUpperCase()==="READY_FOR_LIVE_REVIEW");
- if(!ready.length){host.innerHTML='<div class="empty">Noch kein Modell hat die Validation für den Review-Gate bestanden.</div>';return}
- host.innerHTML='<div class="review-grid">'+ready.map(p=>{
+ if(!ready.length){preserveDetailsHTML(host,'<div class="empty">Noch kein Modell hat die Validation für den Review-Gate bestanden.</div>');return}
+ const reviewHtml='<div class="review-grid">'+ready.map(p=>{
   const a=p.last_analysis||{},dev=a.development_summary||{},val=a.validation_summary||{},good=a.good||[],bad=a.bad||[],next=a.next_steps||[],ov=a.selected_overrides||{},perf=a.performance||{};
   return `<article class="review-card">
    <div class="review-head"><div><small>${esc(p.profile||"")}</small><h3>${esc(a.label||p.label||p.profile||"Model")}</h3></div><span class="pill signal">READY FOR REVIEW</span></div>
@@ -376,7 +397,7 @@ function renderResearch(){
  const remote=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>Remote Research Sync</h4><small>ChatGPT ↔ TMBT Next</small></div><span class="pill ${syncOk?"signal":"idle"}">${syncOk?"ONLINE":(sync.running?"STALE":"OFFLINE")}</span></div>${sync.last_error?`<p class="bad">${esc(sync.last_error)}</p>`:""}</div>`;
  const notes=state.traderNotes?`<details class="research-card trader-notes"><summary><b>Trader Thinking / Observations</b> <small>nur Notizen · keine Regeln</small></summary><pre>${esc(state.traderNotes)}</pre></details>`:"";
 
- $("#researchList").innerHTML=remote+lab+cycle+reportsBox+auto+notes+jobs;
+ preserveDetailsHTML($("#researchList"),remote+lab+cycle+reportsBox+auto+notes+jobs);
  $("#researchAutopilotStart")?.addEventListener("click",()=>researchAutopilotAction("start"));
  $("#researchAutopilotStop")?.addEventListener("click",()=>researchAutopilotAction("stop"));
 }
