@@ -58,6 +58,20 @@ async function refreshArchive(){
 async function refreshOutcomes(){
  try{const d=await api("/api/outcomes");state.outcomes=d.summary||[];renderOutcomes()}catch(e){}
 }
+function researchAlertLabel(j){
+ const req=j?.request||{},kind=String(j?.kind||"research").toLowerCase(),preset=req.preset||j?.job_id||"Research";
+ const notes=String(req.notes||"");
+ let stage="";
+ if(/development baseline/i.test(notes))stage="Baseline";
+ else if(/optimized development candidate/i.test(notes))stage="Optimized Candidate";
+ else if(/locked validation/i.test(notes))stage="Validation";
+ else if(/tick-exact validation audit/i.test(notes))stage="Tick Audit";
+ else if(/news variant/i.test(notes))stage="News Variant";
+ else if(/optimizer:/i.test(notes))stage=notes.replace(/^.*optimizer:\s*/i,"").trim();
+ else if(kind==="optimizer")stage="Optimizer";
+ else stage=kind==="backtest"?"Backtest":kind;
+ return `${preset} · ${stage}`;
+}
 function checkResearchAlerts(jobs){
  let dirty=false;
  for(const j of jobs||[]){
@@ -66,7 +80,7 @@ function checkResearchAlerts(jobs){
   if(terminal&&!researchAlertSeen.has(alertKey)){
    const shouldNotify=researchAlertsPrimed&&(prev===undefined||prev!==st);
    researchAlertSeen.add(alertKey);dirty=true;
-   if(shouldNotify){const msg=`Research ${st}: ${j.request?.preset||j.kind||id}`;toast(msg);if(state.alerts&&"Notification" in window&&Notification.permission==="granted")new Notification("TMBT Research",{body:msg})}
+   if(shouldNotify){const msg=`Research ${st}: ${researchAlertLabel(j)}`;toast(msg);if(state.alerts&&"Notification" in window&&Notification.permission==="granted")new Notification("TMBT Research",{body:msg})}
   }
   state.lastResearchStates[id]=st;
  }
