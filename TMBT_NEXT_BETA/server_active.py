@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import context_factors
+import historical_store
 import smt_trade_management
 import server_ready as ready
 
@@ -203,7 +204,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.24-beta-trader-notes"
+core.APP_VERSION = "0.9.25-beta-databento-history"
 
 
 class Handler(ready.Handler):
@@ -219,6 +220,8 @@ class Handler(ready.Handler):
             return self.json(ctx)
         if u.path == "/api/data-settings":
             return self.json(_masked_secret_status())
+        if u.path == "/api/historical-status":
+            return self.json(historical_store.status(core.WORKSPACE))
         if u.path == "/api/trader-observations":
             try:
                 text = _OBSERVATIONS_FILE.read_text(encoding="utf-8", errors="ignore")
