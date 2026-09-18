@@ -6,10 +6,12 @@ from typing import Any
 
 
 STALE_AFTER = {
+    "1m": 3 * 60,
     "5m": 8 * 60,
     "15m": 18 * 60,
     "30m": 35 * 60,
     "1h": 65 * 60,
+    "4h": 4 * 60 * 60 + 20 * 60,
 }
 
 
@@ -40,7 +42,7 @@ def _tf(tf: str) -> str:
 
 def _suffix(tf: str) -> str:
     z = _tf(tf)
-    return {"5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H"}.get(z, tf)
+    return {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H"}.get(z, tf)
 
 
 def _roots(workspace: Path):
@@ -136,7 +138,7 @@ def _aggregate(bars, minutes: int):
 
 def query(workspace: Path, market: str, tf: str, limit: int = 500):
     market = str(market).upper()
-    if market not in {"NQ", "ES"}:
+    if market not in {"NQ", "ES", "GC"}:
         return None
     ntf = _tf(tf)
 
@@ -156,7 +158,7 @@ def query(workspace: Path, market: str, tf: str, limit: int = 500):
 
     if payload:
         bars, latest_received = _normalize_payload(payload, market, _suffix(ntf))
-    elif ntf in {"15m", "30m", "1h"}:
+    elif ntf in {"15m", "30m", "1h", "4h"}:
         base_payload = None
         base_path = None
         for root in _roots(workspace):
@@ -168,7 +170,7 @@ def query(workspace: Path, market: str, tf: str, limit: int = 500):
         if not base_payload:
             return None
         base, latest_received = _normalize_payload(base_payload, market, "5m")
-        mins = {"15m": 15, "30m": 30, "1h": 60}[ntf]
+        mins = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}[ntf]
         bars = _aggregate(base, mins)
         payload = base_payload
         direct_path = base_path
@@ -198,7 +200,7 @@ def query(workspace: Path, market: str, tf: str, limit: int = 500):
         "provider": provider,
         "ticker": ticker,
         "tickerid": str(payload.get("tickerid") or ticker),
-        "exchange": str(payload.get("exchange") or "CME"),
+        "exchange": str(payload.get("exchange") or ("COMEX" if market == "GC" else "CME")),
         "last_received_at_utc": latest_received.isoformat() if latest_received else None,
         "last_bar_utc": datetime.fromtimestamp(last_close / 1000.0, tz=timezone.utc).isoformat() if last_close else None,
         "age_seconds": age,
