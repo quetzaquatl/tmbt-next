@@ -119,6 +119,10 @@ claimed TTrades rules:
   conservative; if SL and TP occur inside the same 1-minute candle, SL wins;
 - no Early C2 CISD:
   only completed bars may create a historical setup.
+- futures Daily session alignment:
+  NQ/ES/GC Daily candles are built on the Globex session convention
+  18:00 ET -> 17:00 ET (maintenance gap 17:00-18:00 ET), not midnight
+  calendar bars;
 
 These convention parameters may be optimized because they are implementation
 choices. Public/core closure definitions are not silently changed by the
