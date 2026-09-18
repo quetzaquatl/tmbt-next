@@ -101,8 +101,10 @@ def research_requirements(profile: str) -> dict[str, int]:
         return {"min_dev_trades": 250, "min_val_trades": 100}
     if "_TTFM_" in p:
         return {"min_dev_trades": 200, "min_val_trades": 80}
+    if p.startswith(("NQ_SILVER_BULLET_", "ES_SILVER_BULLET_", "GC_")):
+        return {"min_dev_trades": 200, "min_val_trades": 80}
     if p.startswith("XAU_"):
-        return {"min_dev_trades": 80, "min_val_trades": 30}
+        return {"min_dev_trades": 100, "min_val_trades": 40}
     return {"min_dev_trades": 100, "min_val_trades": 50}
 
 
