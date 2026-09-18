@@ -87,6 +87,30 @@
     host.querySelectorAll("tr[data-id]").forEach(r=>r.onclick=()=>selectModel(r.dataset.id));
   };
 
+  function renderActiveMini(){
+    const host=document.querySelector("#activeMiniDock");if(!host)return;
+    const active=(state.models||[]).filter(adActive).sort((a,b)=>{
+      const order={SIGNAL:4,TRIGGERED:4,ARMED:3,READY:2,STRONG:2,WATCH:1,FORMING:1};
+      return (order[adStage(b)]||0)-(order[adStage(a)]||0);
+    });
+    const head=host.querySelector(".active-mini-head span");
+    if(head)head.textContent=String(active.length);
+    const list=host.querySelector(".active-mini-list");if(!list)return;
+    if(!active.length){
+      list.innerHTML='<small class="muted">Keine aktiven Setups.</small>';
+      return;
+    }
+    list.innerHTML=active.slice(0,3).map(m=>{
+      const info=adInfo(m),pct=info.pct==null?"—":info.pct+"%";
+      return `<button class="active-mini-card" data-mini-id="${esc(m.id)}">
+        <span class="active-mini-top"><b>${esc(m.market)} · ${esc(m.tf)}</b><em class="pill ${adStage(m).toLowerCase()}">${esc(adStage(m))}</em></span>
+        <span class="active-mini-name">${esc(m.name)}</span>
+        <span class="active-mini-bottom"><strong>${esc(m.side||"—")}</strong><small>${pct}</small></span>
+      </button>`;
+    }).join("");
+    list.querySelectorAll("[data-mini-id]").forEach(el=>el.onclick=()=>selectModel(el.dataset.miniId));
+  }
+
   // Background monitor: deliberately excludes Active Now to avoid duplication.
   renderRadar=function(){
     const host=document.querySelector("#radarView");if(!host)return;
@@ -178,7 +202,7 @@
   };
 
   function refreshActiveDesk(){
-    try{renderSignals();renderRadar();if(state.selectedModel)draw()}catch(e){console.warn("active desk refresh",e)}
+    try{renderSignals();renderRadar();renderActiveMini();if(state.selectedModel)draw()}catch(e){console.warn("active desk refresh",e)}
   }
   document.querySelector('[data-tab="signals"]')?.addEventListener("click",renderSignals);
   document.querySelector('[data-tab="radar"]')?.addEventListener("click",renderRadar);
