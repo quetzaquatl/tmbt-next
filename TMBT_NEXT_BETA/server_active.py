@@ -10,6 +10,7 @@ from urllib.parse import urlparse, parse_qs
 import context_factors
 import historical_store
 import research_autopilot_bridge
+import research_sync_bridge
 import smt_trade_management
 import server_ready as ready
 
@@ -205,7 +206,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.27-beta-studio-migration"
+core.APP_VERSION = "0.9.28-beta-remote-research"
 
 
 class Handler(ready.Handler):
@@ -229,6 +230,8 @@ class Handler(ready.Handler):
             return self.json({"profiles": research_autopilot_bridge.profiles()})
         if u.path == "/api/research-autopilot/report":
             return self.json(research_autopilot_bridge.latest_report())
+        if u.path == "/api/research-sync/status":
+            return self.json(research_sync_bridge.status())
         if u.path == "/api/trader-observations":
             try:
                 text = _OBSERVATIONS_FILE.read_text(encoding="utf-8", errors="ignore")
@@ -258,6 +261,10 @@ class Handler(ready.Handler):
                 ))
             if u.path == "/api/research-autopilot/stop":
                 return self.json(research_autopilot_bridge.stop())
+            if u.path == "/api/research-sync/start":
+                return self.json(research_sync_bridge.start())
+            if u.path == "/api/research-sync/stop":
+                return self.json(research_sync_bridge.stop())
             if u.path == "/api/data-settings":
                 if not payload:
                     return self.json({"error": "invalid_body"}, 400)
