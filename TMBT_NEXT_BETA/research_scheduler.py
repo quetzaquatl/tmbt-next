@@ -27,7 +27,7 @@ REPORT_ROOT = WORKSPACE / "research_reports"
 LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
 MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "full-research-matrix-v1"
+SCHEDULER_GENERATION = "full-research-matrix-v2-preset-heal"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -954,6 +954,18 @@ def daemon() -> None:
             if _refresh_stored_classifications(state, cfg):
                 _save_profile_state(state)
             available = research_autopilot_bridge.profiles()
+            if "_error" in available:
+                err = str((available.get("_error") or {}).get("label") or "profile_registry_error")
+                _status(
+                    pid=os.getpid(),
+                    running=True,
+                    state="PROFILE_REGISTRY_ERROR",
+                    active_profile=None,
+                    last_error=err,
+                )
+                time.sleep(min(15, cfg["poll_seconds"]))
+                continue
+
             profiles = [p for p in cfg.get("profiles") or [] if p in available]
             ran = False
             completed_profiles = []
