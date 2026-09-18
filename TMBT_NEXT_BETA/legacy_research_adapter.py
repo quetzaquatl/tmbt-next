@@ -117,7 +117,46 @@ def activate() -> dict[str, Any]:
     research_jobs._load_config = load_config
 
     research_autopilot = importlib.import_module("research_autopilot")
-    research_autopilot.APP_DIR = HERE
+
+    # Add the true-futures presets beside the migrated legacy presets so every
+    # original profile remains usable from the compatibility runtime.
+    preset_dir = root / "presets"
+    preset_dir.mkdir(parents=True, exist_ok=True)
+    futures_presets = {
+        "EBP_H1_NQ_FUTURES.json": {
+            "market": "NQ", "model_type": "EBP H1 Indices", "calendar_tz": "America/New_York",
+            "signal_tf": "1H", "session_name": "EBP H1 NQ Futures · All Day NY",
+            "session_start": "00:00", "session_end": "23:59", "session_tz": "America/New_York",
+            "side_mode": "Both", "bias_mode": "Off", "sweep_min_points": 0.0,
+            "target_mode": "Fixed RR", "target_rr": 2.0, "min_target_rr": 0.0,
+            "max_trades_per_day": 0, "execution_mode": "Bar conservative", "news_mode": "Ignore",
+            "ebp_close_mode": "Previous body", "ebp_opposite_color_required": False,
+            "ebp_strong_close_pct": 15.0, "ebp_strong_entry_pct": 25.0, "ebp_strong_stop_pct": 75.0,
+            "ebp_indecisive_entry_pct": 50.0, "ebp_market_close_pct": 50.0,
+            "ebp_very_indecisive_mode": "Market", "ebp_entry_valid_bars": 4,
+            "ebp_min_range_atr": 0.0, "ebp_move_be_after_extreme": True, "force_exit_at_session_end": True,
+        },
+        "EBP_H1_ES_FUTURES.json": {
+            "market": "ES", "model_type": "EBP H1 Indices", "calendar_tz": "America/New_York",
+            "signal_tf": "1H", "session_name": "EBP H1 ES Futures · All Day NY",
+            "session_start": "00:00", "session_end": "23:59", "session_tz": "America/New_York",
+            "side_mode": "Both", "bias_mode": "Off", "sweep_min_points": 0.0,
+            "target_mode": "Fixed RR", "target_rr": 2.0, "min_target_rr": 0.0,
+            "max_trades_per_day": 0, "execution_mode": "Bar conservative", "news_mode": "Ignore",
+            "ebp_close_mode": "Previous body", "ebp_opposite_color_required": False,
+            "ebp_strong_close_pct": 15.0, "ebp_strong_entry_pct": 25.0, "ebp_strong_stop_pct": 75.0,
+            "ebp_indecisive_entry_pct": 50.0, "ebp_market_close_pct": 50.0,
+            "ebp_very_indecisive_mode": "Market", "ebp_entry_valid_bars": 4,
+            "ebp_min_range_atr": 0.0, "ebp_move_be_after_extreme": True, "force_exit_at_session_end": True,
+        },
+    }
+    import json
+    for name, payload in futures_presets.items():
+        p = preset_dir / name
+        if not p.exists():
+            p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    research_autopilot.APP_DIR = root
     research_autopilot.WORKSPACE = WORKSPACE
     research_autopilot.ROOT = WORKSPACE / "research_autopilot"
     research_autopilot.STATUS_PATH = research_autopilot.ROOT / "status.json"
