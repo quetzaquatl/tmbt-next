@@ -148,7 +148,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.20-beta-inspector-reveal"
+core.APP_VERSION = "0.9.22-beta-auto-feed"
 
 
 class Handler(ready.Handler):
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     print("Workspace:", core.WORKSPACE)
     print("Desk: visual-priority live workspace + setup cards + notification history")
     print("Inspector: Active/Monitor click force-opens Setup Inspector and criteria")
-    print("Context hierarchy: symmetric SMT -> PO3 -> Asia/Midnight -> iFVG entry")
+    print("Feed automation: self-healing Twelve guardian + optional Massive futures bridge")\n    print("Context hierarchy: symmetric SMT -> PO3 -> Asia/Midnight -> iFVG entry")
     print("SMT entry veto: confirmed divergence can block the opposite setup before entry")
     print("SMT trade management: raw opposite divergence warns/takes partial; confirmed divergence triggers exit review")
     print("Open: http://127.0.0.1:%s" % core.PORT)
