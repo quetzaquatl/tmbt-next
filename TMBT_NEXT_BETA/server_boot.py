@@ -10,6 +10,7 @@ from pathlib import Path
 import research_autopilot_bridge
 import legacy_runtime
 import research_sync_bridge
+import research_scheduler
 
 
 def workspace() -> Path:
@@ -99,6 +100,19 @@ def start_research_sync() -> None:
         print("Research remote sync start failed:", exc)
 
 
+def start_research_scheduler() -> None:
+    try:
+        result = research_scheduler.start_background()
+        st = result.get("status") or {}
+        print(
+            "Research scheduler:",
+            st.get("state") or result.get("reason") or "unknown",
+            "· running:", bool(st.get("running")),
+        )
+    except Exception as exc:
+        print("Research scheduler start failed:", exc)
+
+
 def print_research_status() -> None:
     try:
         st = research_autopilot_bridge.status()
@@ -132,6 +146,7 @@ print("Workspace:", workspace())
 prepare_legacy_runtime()
 start_feed_guardian()
 start_research_sync()
+start_research_scheduler()
 print_research_status()
 print_collector_status()
 print("Guardian status:", guardian_status_path())
