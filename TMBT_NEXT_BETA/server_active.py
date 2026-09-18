@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.41-beta-workspace-tabs"
+core.APP_VERSION = "0.9.42-beta-fullheight-tabs"
 
 
 class Handler(ready.Handler):
