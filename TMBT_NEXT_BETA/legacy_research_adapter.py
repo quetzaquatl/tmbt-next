@@ -361,6 +361,28 @@ def activate() -> dict[str, Any]:
     # original profile remains usable from the compatibility runtime.
     preset_dir = root / "presets"
     preset_dir.mkdir(parents=True, exist_ok=True)
+
+    def _read_runtime_preset(stem: str) -> dict[str, Any]:
+        p = preset_dir / f"{stem}.json"
+        try:
+            x = json.loads(p.read_text(encoding="utf-8"))
+            return dict(x) if isinstance(x, dict) else {}
+        except Exception:
+            return {}
+
+    def _clone_preset(stem: str, *, market: str, tf: str, name: str | None = None) -> dict[str, Any]:
+        payload = _read_runtime_preset(stem)
+        if not payload:
+            raise RuntimeError(f"missing runtime preset: {stem}")
+        payload["market"] = market
+        payload["signal_tf"] = tf
+        payload["execution_mode"] = "Bar conservative"
+        payload["news_mode"] = "Ignore"
+        if market in FUTURES_MARKETS:
+            payload["calendar_tz"] = "America/New_York"
+        if name:
+            payload["session_name"] = name
+        return payload
     def _ebp_preset(market: str, tf: str) -> dict[str, Any]:
         label = tf.upper()
         return {
@@ -436,11 +458,42 @@ def activate() -> dict[str, Any]:
             futures_presets[f"TTFM_{suffix}_{market}_FUTURES.json"] = _ttfm_preset(
                 market, model_type, entry_tf
             )
-    import json
+
+    # Full research matrix for the currently formalized non-TTFM models.
+    # "All timeframes" means every timeframe that is technically meaningful for
+    # that model engine. Session-bound iFVG models stop at 1H because a 4H candle
+    # cannot be resolved inside the 1-2h execution window without changing the model.
+    ote_tf_specs = (("5m", "M5"), ("15m", "M15"), ("30m", "M30"), ("1H", "H1"), ("4H", "H4"))
+    ifvg_tf_specs = (("1m", "M1"), ("3m", "M3"), ("5m", "M5"), ("15m", "M15"), ("30m", "M30"), ("1H", "H1"))
+
+    for market, tag in (("XAUUSD", "XAU"), ("GC", "GC")):
+        for tf, suffix in ote_tf_specs:
+            futures_presets[f"OTE_BOS_{tag}_{suffix}.json"] = _clone_preset(
+                "OTE_BOS_XAU_15m_AUDIT",
+                market=market,
+                tf=tf,
+                name=f"OTE BOS {tag} {suffix} · All Day",
+            )
+        for tf, suffix in ifvg_tf_specs:
+            futures_presets[f"LONDON_SWEEP_IFVG_{tag}_{suffix}.json"] = _clone_preset(
+                "XAU_LONDON_SWEEP_iFVG_15_17",
+                market=market,
+                tf=tf,
+                name=f"{tag} London Sweep iFVG {suffix}",
+            )
+
+    for market, source_stem in (("NQ", "SILVER_BULLET_USATECH_iFVG"), ("ES", "SILVER_BULLET_USA500_iFVG")):
+        for tf, suffix in ifvg_tf_specs:
+            futures_presets[f"SILVER_BULLET_{market}_{suffix}.json"] = _clone_preset(
+                source_stem,
+                market=market,
+                tf=tf,
+                name=f"{market} Silver Bullet iFVG {suffix} · 10-11 NY",
+            )
+
     for name, payload in futures_presets.items():
         p = preset_dir / name
-        if not p.exists():
-            p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     research_autopilot.APP_DIR = root
     research_autopilot.WORKSPACE = WORKSPACE
@@ -466,6 +519,71 @@ def activate() -> dict[str, Any]:
                 "preset": f"EBP_{suffix}_{market}_FUTURES",
                 "market": market,
                 "optimizers": [dict(x) for x in ebp_optimizers],
+            }
+
+    # Full timeframe research for the currently formalized OTE / iFVG models.
+    ote_optimizers = [
+        {
+            "name": "OTE depth × impulse",
+            "param1": "ote_entry_pct",
+            "values1": [62.0, 66.0, 70.5, 75.0, 79.0],
+            "param2": "ote_min_impulse_atr",
+            "values2": [0.75, 1.0, 1.25, 1.5],
+        },
+        {
+            "name": "Pivot confirmation",
+            "param1": "ote_pivot_left",
+            "values1": [1, 2, 3, 4],
+            "param2": "ote_pivot_right",
+            "values2": [1, 2, 3, 4],
+        },
+    ]
+    ifvg_optimizers = [
+        {
+            "name": "iFVG depth × lookback",
+            "param1": "ifvg_entry_depth_pct",
+            "values1": [25.0, 50.0, 75.0],
+            "param2": "ifvg_lookback_bars",
+            "values2": [12, 18, 24, 36],
+        },
+        {
+            "name": "Inversion × retest window",
+            "param1": "ifvg_inversion_max_bars",
+            "values1": [6, 12, 18],
+            "param2": "ifvg_retest_max_bars",
+            "values2": [6, 12, 18, 24],
+        },
+    ]
+
+    ote_tf_specs = (("5m", "M5"), ("15m", "M15"), ("30m", "M30"), ("1H", "H1"), ("4H", "H4"))
+    ifvg_tf_specs = (("1m", "M1"), ("3m", "M3"), ("5m", "M5"), ("15m", "M15"), ("30m", "M30"), ("1H", "H1"))
+
+    for market, tag, market_label in (
+        ("XAUUSD", "XAU", "XAU Spot"),
+        ("GC", "GC", "Gold Futures (GC)"),
+    ):
+        for _tf, suffix in ote_tf_specs:
+            research_autopilot.PROFILES[f"{tag}_OTE_BOS_{suffix}"] = {
+                "label": f"{market_label} · OTE BOS {suffix}",
+                "preset": f"OTE_BOS_{tag}_{suffix}",
+                "market": market,
+                "optimizers": [dict(x) for x in ote_optimizers],
+            }
+        for _tf, suffix in ifvg_tf_specs:
+            research_autopilot.PROFILES[f"{tag}_SWEEP_IFVG_{suffix}"] = {
+                "label": f"{market_label} · London Sweep iFVG {suffix}",
+                "preset": f"LONDON_SWEEP_IFVG_{tag}_{suffix}",
+                "market": market,
+                "optimizers": [dict(x) for x in ifvg_optimizers],
+            }
+
+    for market in ("NQ", "ES"):
+        for _tf, suffix in ifvg_tf_specs:
+            research_autopilot.PROFILES[f"{market}_SILVER_BULLET_{suffix}"] = {
+                "label": f"{market} Futures · Silver Bullet iFVG {suffix}",
+                "preset": f"SILVER_BULLET_{market}_{suffix}",
+                "market": market,
+                "optimizers": [dict(x) for x in ifvg_optimizers],
             }
 
     # TTFM public-core research. We only optimize the explicit TMBT
