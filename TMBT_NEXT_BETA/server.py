@@ -134,7 +134,7 @@ def research_jobs(limit=20):
             s = read_json(d / "status.json", None)
             if isinstance(s, dict):
                 s = dict(s)
-                s.setdefault("job_id", d.name)
+                if not s.get("job_id"): s["job_id"] = d.name
                 try: s["_mtime"] = (d / "status.json").stat().st_mtime
                 except Exception: s["_mtime"] = 0
                 rows.append(s)
