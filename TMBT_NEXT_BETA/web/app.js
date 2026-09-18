@@ -371,10 +371,38 @@ function renderResearch(){
  const arr=state.research||[],a=state.researchAutopilot||{},profiles=a.available_profiles||{},rs=state.researchScheduler||{};
  const opts=Object.entries(profiles).filter(([k])=>k!=="_error").map(([k,v])=>`<option value="${esc(k)}" ${String(a.profile||"")==k?"selected":""}>${esc(v.label||k)}</option>`).join("");
 
- const cp=rs.cycle_progress||{},cpPct=Math.max(0,Math.min(100,Number(cp.pct||0))),lj=cp.live_job||{},jp=lj.progress||{},jobPct=Math.max(0,Math.min(100,Number(jp.pct||0)));
- const jobDetail=lj.job_id?`<div class="research-inner-progress"><div class="model-row"><small><b>Aktueller Teiljob:</b> ${esc(lj.kind||"research")} · ${jobPct.toFixed(1)}%${jp.combo?" · Combo "+jp.combo+"/"+(jp.combos||"?"):""}${jp.date?" · "+esc(jp.date):""}${jp.trades!=null?" · Trades "+jp.trades:""}</small><span class="pill ${lj.stalled?"blocked":"signal"}">${lj.stalled?"KEIN HEARTBEAT":("Heartbeat "+Math.round(Number(lj.heartbeat_age_seconds||0))+"s")}</span></div><div class="progress sub"><i style="width:${jobPct}%"></i></div></div>`:"";
+ const cp=rs.cycle_progress||{},cpPct=Math.max(0,Math.min(100,Number(cp.pct||0))),lj=cp.live_job||{},jp=lj.progress||{},jobPct=Math.max(0,Math.min(100,Number(jp.pct||0))),matrixPct=Math.max(0,Math.min(100,Number(cp.matrix_pct||0)));
+ const secText=v=>{const n=Number(v);if(!Number.isFinite(n))return"—";const s=Math.max(0,Math.round(n)),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;return h?String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0"):String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0")};
+ const ageText=v=>{const n=Number(v);if(!Number.isFinite(n))return"—";if(n<60)return Math.round(n)+"s";if(n<3600)return Math.round(n/60)+"m";return (n/3600).toFixed(1)+"h"};
+ const statusClass={RUNNING:"signal",FINALIZING:"armed",WAITING:"idle",NEXT_IN_QUEUE:"armed",COMPLETED:"signal",STALLED:"blocked",STOPPED:"blocked"}[String(cp.display_state||"")]||"idle";
+ const jobMeta=[
+   jp.combo?("Combo "+jp.combo+"/"+(jp.combos||"?")):"",
+   jp.date?esc(jp.date):"",
+   jp.trades!=null?("Trades "+jp.trades):"",
+ ].filter(Boolean).join(" · ");
+ const jobDetail=lj.job_id?`<div class="research-inner-progress"><div class="research-progress-head"><div><b>Aktueller Teiljob</b><span>${esc(lj.kind||"research")} · ${jobPct.toFixed(1)}%${jobMeta?" · "+jobMeta:""}</span></div><span class="pill ${lj.stalled?"blocked":"signal"}">${lj.stalled?"KEIN HEARTBEAT":("Heartbeat "+ageText(lj.heartbeat_age_seconds))}</span></div><div class="progress sub"><i style="width:${jobPct}%"></i></div></div>`:`<div class="research-inner-progress muted">Kein technischer Teiljob aktiv · ${esc(cp.current_action||"Scheduler wartet.")}</div>`;
  const matrixLabel=cp.matrix_total?`Matrix ${cp.matrix_index||0}/${cp.matrix_total}`:"";
- const cycle=cp.profile?`<div class="research-card"><div class="model-row"><div><h4>${esc(cp.label||cp.profile)}</h4><small>Automatischer Research-Zyklus${matrixLabel?" · "+matrixLabel:""}</small></div><span class="pill ${cp.running?"signal":"idle"}">${cp.running?"RUNNING":"IDLE"}</span></div><div class="progress"><i style="width:${cpPct}%"></i></div><div class="model-row"><small><b>${cp.step||0}/${cp.total||0}</b> · ${esc(cp.stage_label||cp.stage||"Wartet")} · ${cpPct.toFixed(1)}%</small><small>${matrixLabel?esc(matrixLabel)+" · ":""}${cp.news_tests_enabled?"inkl. historische News-Tests":"ohne News-Tests"}</small></div>${jobDetail}</div>`:"";
+ const cycle=cp.profile?`<div class="research-card research-cycle-card">
+   <div class="research-cycle-head">
+    <div><h4>${esc(cp.label||cp.profile)}</h4><small>${esc(cp.profile||"")} · Automatischer Research-Zyklus</small></div>
+    <span class="pill ${statusClass}">${esc(cp.display_state||"WAITING")}</span>
+   </div>
+   <div class="research-current-action"><small>AKTUELL</small><b>${esc(cp.current_action||cp.stage_label||"Wartet")}</b></div>
+   <div class="research-dual-progress">
+    <section><div class="research-progress-head"><b>Modellzyklus</b><span>${cp.step||0}/${cp.total||0} · ${cpPct.toFixed(1)}%</span></div><div class="progress"><i style="width:${cpPct}%"></i></div><small>${esc(cp.stage_label||cp.stage||"Wartet")}</small></section>
+    <section><div class="research-progress-head"><b>Gesamtmatrix</b><span>${cp.matrix_completed??0}/${cp.matrix_total??0} abgeschlossen · ${matrixPct.toFixed(1)}%</span></div><div class="progress matrix"><i style="width:${matrixPct}%"></i></div><small>${matrixLabel?esc(matrixLabel):"—"} · ${cp.matrix_remaining??0} verbleibend</small></section>
+   </div>
+   <div class="research-runtime-grid">
+    <div><small>Laufzeit Modell</small><b>${secText(cp.profile_elapsed_seconds)}</b></div>
+    <div><small>Letzte Aktivität</small><b>vor ${ageText(cp.last_activity_age_seconds)}</b></div>
+    <div><small>Scheduler</small><b>${cp.scheduler_running?"aktiv":"gestoppt"}${cp.scheduler_pid?" · PID "+cp.scheduler_pid:""}</b></div>
+    <div><small>Autopilot</small><b>${cp.autopilot_running?"aktiv":"wartet"}${cp.autopilot_pid?" · PID "+cp.autopilot_pid:""}</b></div>
+    <div class="wide"><small>Nächstes Modell</small><b>${esc(cp.next_profile_label||"—")}</b></div>
+    <div><small>News-Tests</small><b>${cp.news_tests_enabled?"aktiv":"aus"}</b></div>
+   </div>
+   ${jobDetail}
+   ${cp.last_error?`<div class="research-cycle-error"><b>Letzter Fehler:</b> ${esc(cp.last_error)}</div>`:""}
+  </div>`:"";
 
  const rawJobs=arr.length?arr.map(j=>{const p=j.progress||{},pct=Number(p.pct||0);return`<div class="research-card"><div class="model-row"><h4>${esc(researchAlertLabel(j))}</h4><span class="pill ${String(j.state).toLowerCase()}">${esc(j.state)}</span></div><div class="progress"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div><div class="model-row"><small>${pct.toFixed(1)}% · ${esc(p.date||"")} · Trades ${p.trades??"—"}</small><small>${esc(j.job_id||"")}</small></div>${j.error?`<p class="bad">${esc(j.error)}</p>`:""}</div>`}).join(""):'<div class="empty">Keine technischen Teiljobs.</div>';
  const jobs=`<details class="research-card"><summary><b>Technische Teiljobs</b> <small>${arr.length} · normalerweise eingeklappt</small></summary>${rawJobs}</details>`;
