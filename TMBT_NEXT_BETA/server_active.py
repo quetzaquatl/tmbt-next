@@ -207,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.34-beta-fast-twelve-sqlite"
+core.APP_VERSION = "0.9.35-beta-live-sqlite-canonical"
 
 
 class Handler(ready.Handler):
