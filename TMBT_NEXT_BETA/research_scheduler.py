@@ -29,7 +29,7 @@ LATEST_MD = REPORT_ROOT / "latest.md"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
-    "profiles": ["NQ_EBP_H1", "ES_EBP_H1", "XAU_OTE_BOS", "XAU_SWEEP_IFVG"],
+    "profiles": ["NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1", "ES_EBP_M15", "ES_EBP_M30", "ES_EBP_H1", "XAU_OTE_BOS", "XAU_SWEEP_IFVG"],
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
     "poll_seconds": 60,
@@ -85,6 +85,21 @@ def load_config() -> dict[str, Any]:
     cfg = dict(DEFAULT_CONFIG)
     cfg.update(_read_json(CONFIG))
     cfg["profiles"] = [str(x) for x in list(cfg.get("profiles") or [])]
+    # One-time expansion of the existing H1 EBP schedule to the explicitly
+    # requested M15/M30/H1 research matrix. Preserve any extra custom profiles.
+    expanded = []
+    for p in cfg["profiles"]:
+        if p == "NQ_EBP_H1":
+            for q in ("NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1"):
+                if q not in expanded:
+                    expanded.append(q)
+        elif p == "ES_EBP_H1":
+            for q in ("ES_EBP_M15", "ES_EBP_M30", "ES_EBP_H1"):
+                if q not in expanded:
+                    expanded.append(q)
+        elif p not in expanded:
+            expanded.append(p)
+    cfg["profiles"] = expanded
     cfg["poll_seconds"] = max(30, int(cfg.get("poll_seconds") or 60))
     cfg["cycle_hours_failed"] = max(1, int(cfg.get("cycle_hours_failed") or 24))
     cfg["cycle_hours_passed"] = max(24, int(cfg.get("cycle_hours_passed") or 168))
@@ -195,9 +210,15 @@ def status() -> dict[str, Any]:
             report = item.get("last_autopilot_report") or {}
             analysis = item.get("last_analysis") or {}
             if report:
-                analysis = dict(analysis)
-                analysis["performance"] = research_performance.performance_bundle(report)
-                item["last_analysis"] = analysis
+                refreshed = analyze_report(
+                    report,
+                    failed_cycles=int(item.get("failed_cycles") or 0),
+                    max_failed_cycles=int(cfg["max_failed_cycles"]),
+                )
+                refreshed["performance"] = research_performance.performance_bundle(report)
+                item["last_analysis"] = refreshed
+                item["candidate_state"] = refreshed.get("candidate_state")
+                item["last_verdict"] = refreshed.get("verdict")
         except Exception as exc:
             item["performance_error"] = f"{type(exc).__name__}: {exc}"
     st["profiles"] = profiles
@@ -239,6 +260,93 @@ def _delta_text(name: str, before: float, after: float, digits: int = 3) -> str:
     return f"{name}: {before:.{digits}f} -> {after:.{digits}f} ({sign}{diff:.{digits}f})"
 
 
+def _metric_snapshot(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "trades": int(row.get("trades") or 0),
+        "expectancy_r": _num(row, "expectancy_r"),
+        "profit_factor_r": _num(row, "profit_factor_r"),
+        "max_drawdown_r": _num(row, "max_drawdown_r"),
+        "net_r": _num(row, "net_r"),
+        "winrate_pct": _num(row, "winrate_pct"),
+    }
+
+
+def _optimization_steps(report: dict[str, Any]) -> list[dict[str, Any]]:
+    stages = [x for x in (report.get("stages") or []) if isinstance(x, dict)]
+    baseline = next((x.get("summary") or {} for x in stages if x.get("name") == "development_baseline"), {})
+    previous = _metric_snapshot(baseline)
+    previous_overrides: dict[str, Any] = {"execution_mode": "Bar conservative"}
+    out: list[dict[str, Any]] = []
+
+    for stage in stages:
+        name = str(stage.get("name") or "")
+        if name.startswith("optimizer_"):
+            chosen = stage.get("chosen") or {}
+            after = dict(stage.get("overrides_after") or {})
+            changes = []
+            for key, value in after.items():
+                if key == "execution_mode":
+                    continue
+                before_value = previous_overrides.get(key)
+                if before_value != value:
+                    changes.append({"parameter": key, "before": before_value, "after": value})
+            after_metrics = _metric_snapshot(chosen)
+            deltas = {
+                "expectancy_r": after_metrics["expectancy_r"] - previous["expectancy_r"],
+                "profit_factor_r": after_metrics["profit_factor_r"] - previous["profit_factor_r"],
+                "max_drawdown_r": after_metrics["max_drawdown_r"] - previous["max_drawdown_r"],
+                "net_r": after_metrics["net_r"] - previous["net_r"],
+                "trades": after_metrics["trades"] - previous["trades"],
+            }
+            out.append({
+                "stage": name,
+                "name": stage.get("name") or name,
+                "tested_combinations": int(stage.get("tested_combinations") or 0),
+                "changes": changes,
+                "before": previous,
+                "after": after_metrics,
+                "deltas": deltas,
+                "robust_score": chosen.get("_robust_score"),
+                "reason": (
+                    "Gewählt über den robusten Development-Score: Expectancy und Profit Factor "
+                    "werden belohnt, Drawdown/Trade und zu kleine Stichproben bestraft; zusätzlich "
+                    "fließen benachbarte Parameter-Kombinationen ein, damit kein isolierter Grid-Peak gewinnt."
+                ),
+            })
+            previous = after_metrics
+            previous_overrides = after
+
+        elif name == "forex_factory_selection":
+            selected = stage.get("selected") or {}
+            selected_summary = _metric_snapshot(selected.get("summary") or {})
+            selected_overrides = dict((selected.get("overrides") or {}))
+            if selected:
+                out.append({
+                    "stage": name,
+                    "name": f"News-Auswahl · {selected.get('label') or 'Ignore'}",
+                    "tested_combinations": len(stage.get("variants") or []),
+                    "changes": [
+                        {"parameter": k, "before": previous_overrides.get(k), "after": v}
+                        for k, v in selected_overrides.items()
+                        if previous_overrides.get(k) != v
+                    ],
+                    "before": previous,
+                    "after": selected_summary,
+                    "deltas": {
+                        "expectancy_r": selected_summary["expectancy_r"] - previous["expectancy_r"],
+                        "profit_factor_r": selected_summary["profit_factor_r"] - previous["profit_factor_r"],
+                        "max_drawdown_r": selected_summary["max_drawdown_r"] - previous["max_drawdown_r"],
+                        "net_r": selected_summary["net_r"] - previous["net_r"],
+                        "trades": selected_summary["trades"] - previous["trades"],
+                    },
+                    "robust_score": selected.get("score"),
+                    "reason": "Beste zulässige historische News-Variante auf dem Development-Sample; Validation bleibt bis zur Auswahl unangetastet.",
+                })
+                previous = selected_summary
+                previous_overrides.update(selected_overrides)
+    return out
+
+
 def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cycles: int) -> dict[str, Any]:
     baseline = {}
     for stage in report.get("stages") or []:
@@ -247,7 +355,14 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
             break
     dev = _summary(report, "development_summary")
     val = _summary(report, "validation_summary")
-    verdict = str(((report.get("validation") or {}).get("verdict") or "UNKNOWN")).upper()
+    old_validation = report.get("validation") or {}
+    min_val_trades = int(
+        (report.get("rules") or {}).get("min_val_trades")
+        or research_autopilot_bridge.research_requirements(str(report.get("profile") or "")).get("min_val_trades")
+        or 50
+    )
+    validation = legacy_research_adapter.strict_validation_verdict(dev, val, min_val_trades)
+    verdict = str(validation.get("verdict") or "UNKNOWN").upper()
 
     good: list[str] = []
     bad: list[str] = []
@@ -273,16 +388,19 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
         elif d_dd > 0:
             bad.append(_delta_text("Development Drawdown R", b_dd, d_dd, 1))
 
-    if v_exp > 0:
-        good.append(f"Validation Expectancy positiv: {v_exp:.3f}R/Trade.")
+    if v_exp >= 0.08:
+        good.append(f"Validation Expectancy erfüllt: {v_exp:.3f}R/Trade.")
     else:
-        bad.append(f"Validation Expectancy nicht positiv: {v_exp:.3f}R/Trade.")
-    if v_pf >= 1.0:
-        good.append(f"Validation Profit Factor: {v_pf:.2f}.")
+        bad.append(f"Validation Expectancy unter Live-Gate 0.080R: {v_exp:.3f}R/Trade.")
+    if v_pf >= 1.20:
+        good.append(f"Validation Profit Factor erfüllt: {v_pf:.2f}.")
     else:
-        bad.append(f"Validation Profit Factor unter 1: {v_pf:.2f}.")
-    if v_trades < 15:
-        bad.append(f"Validation Stichprobe klein: {v_trades} Trades.")
+        bad.append(f"Validation Profit Factor unter Live-Gate 1.20: {v_pf:.2f}.")
+    if v_trades < min_val_trades:
+        bad.append(f"Validation Stichprobe zu klein: {v_trades} < {min_val_trades} Trades.")
+    failed_gates = [k for k, ok in (validation.get("gates") or {}).items() if not ok]
+    if failed_gates:
+        bad.append("Live-Gate nicht bestanden: " + ", ".join(failed_gates) + ".")
 
     if verdict == "PASS":
         candidate_state = "READY_FOR_LIVE_REVIEW"
@@ -308,7 +426,9 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
         "baseline_summary": baseline,
         "development_summary": dev,
         "validation_summary": val,
-        "validation": report.get("validation") or {},
+        "validation": validation,
+        "original_validation": old_validation,
+        "optimization_steps": _optimization_steps(report),
         "selected_overrides": report.get("selected_overrides") or {},
         "holdout": report.get("holdout") or {},
         "policy": {
@@ -335,6 +455,14 @@ def _markdown(analysis: dict[str, Any]) -> str:
     lines += ["", "## Was schlecht lief"]
     bad = analysis.get("bad") or []
     lines.extend([f"- {x}" for x in bad] or ["- Keine zentralen Warnpunkte aus den Kernmetriken."])
+    lines += ["", "## Optimierungsverlauf"]
+    for step in analysis.get("optimization_steps") or []:
+        lines.append(f"### {step.get('name') or step.get('stage')}")
+        changes = step.get("changes") or []
+        lines.append("- Änderungen: " + (", ".join(f"{x.get('parameter')}: {x.get('before')} -> {x.get('after')}" for x in changes) or "keine Parameteränderung"))
+        d = step.get("deltas") or {}
+        lines.append(f"- Einfluss: Expectancy {d.get('expectancy_r',0):+.3f}R · PF {d.get('profit_factor_r',0):+.3f} · DD {d.get('max_drawdown_r',0):+.1f}R · Net {d.get('net_r',0):+.1f}R")
+        lines.append(f"- Warum: {step.get('reason') or '-'}")
     lines += ["", "## Naechster Schritt"]
     lines.extend([f"- {x}" for x in (analysis.get("next_steps") or [])])
     lines += [
@@ -428,7 +556,7 @@ def _due(profile: str, state: dict[str, Any], cfg: dict[str, Any]) -> bool:
 
 
 def _databento_ready_for(profile: str) -> bool:
-    if profile not in {"NQ_EBP_H1", "ES_EBP_H1"}:
+    if not (str(profile).startswith("NQ_EBP_") or str(profile).startswith("ES_EBP_")):
         return True
     st = historical_store.status(WORKSPACE)
     return bool(st.get("db_exists") and str(st.get("state") or "").upper() == "COMPLETE")
@@ -485,7 +613,8 @@ def run_profile(profile: str, cfg: dict[str, Any], state: dict[str, Any]) -> dic
             "worker_status": worker_status,
         }
 
-    verdict = str(((report.get("validation") or {}).get("verdict") or "UNKNOWN")).upper()
+    provisional = analyze_report(report, failed_cycles=failed_cycles, max_failed_cycles=int(cfg["max_failed_cycles"]))
+    verdict = str(provisional.get("verdict") or "UNKNOWN").upper()
     next_failed = 0 if verdict == "PASS" else failed_cycles + 1
     analysis = analyze_report(report, failed_cycles=next_failed, max_failed_cycles=int(cfg["max_failed_cycles"]))
     paths = archive_report(report, analysis)
