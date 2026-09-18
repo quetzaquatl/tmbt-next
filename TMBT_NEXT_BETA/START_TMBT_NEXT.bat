@@ -11,7 +11,8 @@ echo TMBT NEXT BETA 0.9.22 AUTO FEED
 echo =========================================
 echo Workspace: %TMBT_WORKSPACE%
 echo URL: http://127.0.0.1:%TMBT_NEXT_PORT%
-echo Active/Monitor card click force-opens Setup Inspector and criteria.\necho Feed Guardian auto-starts and repairs the existing Twelve collector when possible.
+echo Active/Monitor card click force-opens Setup Inspector and criteria.
+echo Feed Guardian auto-starts and repairs the existing Twelve collector when possible.
 echo Entry context: symmetric NQ/ES SMT -^> PO3 -^> Asia/Midnight -^> iFVG.
 echo Trade management: raw opposite SMT warns/takes partial; confirmed opposite SMT triggers exit review.
 echo.
