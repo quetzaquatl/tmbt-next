@@ -726,6 +726,7 @@ def bootstrap():
         "research":jobs,
         "archive":archive[:80],
         "outcome_summary":outcome_summary(),
+        "outcome_groups":outcome_dashboard(),
     }
 
 class Handler(BaseHTTPRequestHandler):
