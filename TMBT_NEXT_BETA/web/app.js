@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],research:[],researchAutopilot:null,researchSync:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
+const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],research:[],researchAutopilot:null,researchSync:null,researchScheduler:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
 const RESEARCH_ALERT_KEY="tmbt_next_research_alerts_v1";
 const researchAlertSeen=(()=>{try{const x=JSON.parse(localStorage.getItem(RESEARCH_ALERT_KEY)||"[]");return new Set(Array.isArray(x)?x.slice(-500):[])}catch{return new Set()}})();
 let researchAlertsPrimed=false;
@@ -27,14 +27,15 @@ async function pollModels(){
 }
 async function pollResearch(){
  try{
-  const [d,n,a,s]=await Promise.all([
+  const [d,n,a,s,rs]=await Promise.all([
    api("/api/research?limit=12"),
    api("/api/trader-observations").catch(()=>({text:""})),
    api("/api/research-autopilot/status").catch(()=>null),
-   api("/api/research-sync/status").catch(()=>null)
+   api("/api/research-sync/status").catch(()=>null),
+   api("/api/research-scheduler/status").catch(()=>null)
   ]);
-  state.research=d.jobs||[];state.traderNotes=n.text||"";state.researchAutopilot=a;state.researchSync=s;renderResearch();checkResearchAlerts(state.research);
-  const j=state.research[0];dot("#researchDot",s?.running||a?.running||j&&String(j.state).toUpperCase()==="RUNNING"?"ok":"warn")
+  state.research=d.jobs||[];state.traderNotes=n.text||"";state.researchAutopilot=a;state.researchSync=s;state.researchScheduler=rs;renderResearch();checkResearchAlerts(state.research);
+  const j=state.research[0];dot("#researchDot",rs?.running||s?.running||a?.running||j&&String(j.state).toUpperCase()==="RUNNING"?"ok":"warn")
  }catch(e){}
 }
 
@@ -93,13 +94,18 @@ async function openArchive(hid,sid){const row=state.archive.find(x=>x.history_id
 function backLive(){state.mode="live";state.snapshot=null;$("#snapshotBanner").classList.remove("show");resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
 function renderOutcomes(){const arr=state.outcomes||[];$("#outcomeCards").className="outcome-grid";$("#outcomeCards").innerHTML=arr.length?arr.map(o=>`<div class="outcome-card"><h4>${esc(o.model)}</h4><div class="mini-grid"><div><small>Signals</small><b>${o.signals}</b></div><div><small>Winrate</small><b>${o.winrate==null?"—":fmt(o.winrate,1)+"%"}</b></div><div><small>Net R</small><b class="${o.net_r>0?"good":o.net_r<0?"bad":""}">${fmt(o.net_r,2)}R</b></div><div><small>Expectancy</small><b>${o.expectancy==null?"—":fmt(o.expectancy,2)+"R"}</b></div><div><small>Ø MFE</small><b>${o.avg_mfe==null?"—":fmt(o.avg_mfe,2)+"R"}</b></div><div><small>Ø MAE</small><b>${o.avg_mae==null?"—":fmt(o.avg_mae,2)+"R"}</b></div></div></div>`).join(""):'<div class="empty">Noch keine Outcome-Daten.</div>'}
 function renderResearch(){
- const arr=state.research||[],a=state.researchAutopilot||{},profiles=a.available_profiles||{};
+ const arr=state.research||[],a=state.researchAutopilot||{},profiles=a.available_profiles||{},rs=state.researchScheduler||{};
  const jobs=arr.length?arr.map(j=>{const p=j.progress||{},pct=Number(p.pct||0);return`<div class="research-card"><div class="model-row"><h4>${esc(j.request?.preset||j.kind||j.job_id)}</h4><span class="pill ${String(j.state).toLowerCase()}">${esc(j.state)}</span></div><div class="progress"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div><div class="model-row"><small>${pct.toFixed(1)}% · ${esc(p.date||"")} · Trades ${p.trades??"—"}</small><small>${esc(j.job_id||"")}</small></div>${j.error?`<p class="bad">${esc(j.error)}</p>`:""}</div>`}).join(""):'<div class="empty">Keine Research-Jobs gefunden.</div>';
  const opts=Object.entries(profiles).filter(([k])=>k!=="_error").map(([k,v])=>`<option value="${esc(k)}" ${String(a.profile||"")==k?"selected":""}>${esc(v.label||k)}</option>`).join("");
  const auto=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>Research Autopilot</h4><small>TMBT Next · Backtest + Optimizer · Observations ausgeschlossen</small></div><span class="pill ${a.running?"signal":"idle"}">${a.running?"RUNNING":"STOPPED"}</span></div><div class="model-row"><select id="researchAutopilotProfile" ${a.running?"disabled":""}>${opts}</select><span><button id="researchAutopilotStart" ${a.running||!opts?"disabled":""}>Start</button> <button id="researchAutopilotStop" class="ghost" ${a.running?"":"disabled"}>Stop</button></span></div><div class="model-row"><small>${a.running?"PID "+esc(a.pid||"—")+" · "+esc(a.profile||""):"Worker nicht aktiv"} · 1m Databento Futures laufen bar-konservativ</small><small>${esc(a.runtime?.runtime||"")}</small></div>${a.last_error?`<p class="bad">${esc(a.last_error)}</p>`:""}</div>`;
  const sync=state.researchSync||{};const remote=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>Remote Research Sync</h4><small>ChatGPT ↔ TMBT Next · GitHub command channel</small></div><span class="pill ${sync.running?"signal":"idle"}">${sync.running?"ONLINE":"OFFLINE"}</span></div><div class="model-row"><small>${esc(sync.remote||sync.repo_dir||"—")}</small><small>${sync.accept_commands?"Commands aktiv":"Commands aus"} · Live-Mirror ${sync.publish_live?"an":"aus"}</small></div></div>`;
+ const rp=rs.profiles||{},latest=rs.latest_report?.analysis||{},db=rs.databento||{};
+ const pRows=Object.values(rp).map(p=>`<div class="model-row"><small>${esc(p.label||p.profile||"")}</small><span class="pill ${String(p.candidate_state||"idle").toLowerCase()}">${esc(p.candidate_state||"PENDING")}</span></div>`).join("");
+ const good=(latest.good||[]).slice(0,3).map(x=>`<li class="good">${esc(x)}</li>`).join("");
+ const bad=(latest.bad||[]).slice(0,3).map(x=>`<li class="bad">${esc(x)}</li>`).join("");
+ const lab=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>Auto Research Lab</h4><small>regelmäßige Backtests + Optimierung pro Modell</small></div><span class="pill ${rs.running?"signal":"idle"}">${rs.running?esc(rs.state||"RUNNING"):"STOPPED"}</span></div><div class="model-row"><small>Databento: ${db.import_complete?"COMPLETE":esc(db.state||"WAITING")}</small><small>Auto-Live: AUS · Review erforderlich</small></div>${pRows}${latest.profile?`<details open><summary>Letzter Bericht · ${esc(latest.label||latest.profile)} · ${esc(latest.verdict||"")}</summary><ul>${good}${bad}</ul></details>`:""}</div>`;
  const notes=state.traderNotes?`<details class="research-card trader-notes"><summary><b>Trader Thinking / Observations</b> <small>nur Notizen · keine Regeln</small></summary><pre>${esc(state.traderNotes)}</pre></details>`:"";
- $("#researchList").innerHTML=remote+auto+notes+jobs;
+ $("#researchList").innerHTML=remote+lab+auto+notes+jobs;
  $("#researchAutopilotStart")?.addEventListener("click",()=>researchAutopilotAction("start"));
  $("#researchAutopilotStop")?.addEventListener("click",()=>researchAutopilotAction("stop"));
 }
