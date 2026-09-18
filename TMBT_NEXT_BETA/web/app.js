@@ -1,5 +1,10 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],research:[],researchAutopilot:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
+const RESEARCH_ALERT_KEY="tmbt_next_research_alerts_v1";
+const researchAlertSeen=(()=>{try{const x=JSON.parse(localStorage.getItem(RESEARCH_ALERT_KEY)||"[]");return new Set(Array.isArray(x)?x.slice(-500):[])}catch{return new Set()}})();
+let researchAlertsPrimed=false;
+function saveResearchAlertSeen(){try{localStorage.setItem(RESEARCH_ALERT_KEY,JSON.stringify([...researchAlertSeen].slice(-500)))}catch{}}
+function researchJobKey(j){return String(j?.job_id||j?.id||[j?.created_at_utc,j?.kind,j?.request?.preset].filter(Boolean).join("|")||"")}
 const fmt=(v,n=2)=>v===null||v===undefined||v===""?"—":Number(v).toFixed(n);
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const iso=t=>{try{return new Date(typeof t==="number"&&t>1e12?t:Number(t)||t).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}catch{return"—"}};
@@ -52,7 +57,19 @@ async function refreshOutcomes(){
  try{const d=await api("/api/outcomes");state.outcomes=d.summary||[];renderOutcomes()}catch(e){}
 }
 function checkResearchAlerts(jobs){
- for(const j of jobs||[]){const id=j.job_id||"";const st=String(j.state||"");const prev=state.lastResearchStates[id];if(prev&&prev!==st&&["COMPLETED","FAILED","CANCELLED"].includes(st.toUpperCase())){const msg=`Research ${st}: ${j.request?.preset||j.kind||id}`;toast(msg);if(state.alerts&&Notification.permission==="granted")new Notification("TMBT Research",{body:msg})}state.lastResearchStates[id]=st}
+ let dirty=false;
+ for(const j of jobs||[]){
+  const id=researchJobKey(j);if(!id)continue;
+  const st=String(j.state||"").toUpperCase(),prev=state.lastResearchStates[id],terminal=["COMPLETED","FAILED","CANCELLED"].includes(st),alertKey=`${id}|${st}`;
+  if(terminal&&!researchAlertSeen.has(alertKey)){
+   const shouldNotify=researchAlertsPrimed&&(prev===undefined||prev!==st);
+   researchAlertSeen.add(alertKey);dirty=true;
+   if(shouldNotify){const msg=`Research ${st}: ${j.request?.preset||j.kind||id}`;toast(msg);if(state.alerts&&"Notification" in window&&Notification.permission==="granted")new Notification("TMBT Research",{body:msg})}
+  }
+  state.lastResearchStates[id]=st;
+ }
+ if(dirty)saveResearchAlertSeen();
+ researchAlertsPrimed=true;
 }
 async function loadBars(){
  if(state.mode==="snapshot")return;
