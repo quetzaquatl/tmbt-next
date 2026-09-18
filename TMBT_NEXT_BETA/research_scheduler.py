@@ -26,6 +26,7 @@ LOCK_FILE = ROOT / "scheduler.lock"
 REPORT_ROOT = WORKSPACE / "research_reports"
 LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
+MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -46,6 +47,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "run_on_start": True,
     "auto_live_promotion": False,
     "ttfm_public_core_enabled": True,
+    "full_model_matrix_enabled": True,
+    "matrix_generation": MATRIX_GENERATION,
 }
 
 
@@ -117,6 +120,33 @@ def load_config() -> dict[str, Any]:
         for p in ttfm_profiles:
             if p not in cfg["profiles"]:
                 cfg["profiles"].append(p)
+
+    if bool(cfg.get("full_model_matrix_enabled", True)):
+        # Replace the two old single-TF aliases with the explicit matrix so the
+        # same M15/M5 run is not executed twice under different names.
+        cfg["profiles"] = [
+            p for p in cfg["profiles"]
+            if p not in {"XAU_OTE_BOS", "XAU_SWEEP_IFVG"}
+        ]
+        matrix = []
+        matrix += [
+            "NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1",
+            "ES_EBP_M15", "ES_EBP_M30", "ES_EBP_H1",
+        ]
+        for tag in ("XAU", "GC"):
+            matrix += [f"{tag}_OTE_BOS_{tf}" for tf in ("M5", "M15", "M30", "H1", "H4")]
+            matrix += [f"{tag}_SWEEP_IFVG_{tf}" for tf in ("M1", "M3", "M5", "M15", "M30", "H1")]
+        for market in ("NQ", "ES"):
+            matrix += [f"{market}_SILVER_BULLET_{tf}" for tf in ("M1", "M3", "M5", "M15", "M30", "H1")]
+        matrix += [
+            "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
+            "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
+            "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
+        ]
+        for p in matrix:
+            if p not in cfg["profiles"]:
+                cfg["profiles"].append(p)
+        cfg["matrix_generation"] = MATRIX_GENERATION
     cfg["poll_seconds"] = max(30, int(cfg.get("poll_seconds") or 60))
     cfg["cycle_hours_failed"] = max(1, int(cfg.get("cycle_hours_failed") or 24))
     cfg["cycle_hours_passed"] = max(24, int(cfg.get("cycle_hours_passed") or 168))
@@ -246,6 +276,9 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
         "message": message,
         "news_tests_enabled": use_news,
         "live_job": live_job,
+        "matrix_index": int(_read_json(STATUS).get("matrix_index") or 0),
+        "matrix_total": int(_read_json(STATUS).get("matrix_total") or len(cfg.get("profiles") or [])),
+        "matrix_generation": str(cfg.get("matrix_generation") or MATRIX_GENERATION),
     }
 
 
@@ -624,6 +657,10 @@ def _refresh_stored_classifications(state: dict[str, Any], cfg: dict[str, Any]) 
 
 def _due(profile: str, state: dict[str, Any], cfg: dict[str, Any]) -> bool:
     item = (state.get("profiles") or {}).get(profile) or {}
+    # A new matrix generation forces exactly one fresh pass through every
+    # profile, even if an older single-TF result ran recently.
+    if str(item.get("matrix_generation") or "") != str(cfg.get("matrix_generation") or MATRIX_GENERATION):
+        return True
     if item.get("candidate_state") == "REVIEW_REQUIRED":
         return False
     last = _parse_dt(item.get("last_finished_at_utc"))
@@ -638,6 +675,9 @@ def _databento_ready_for(profile: str) -> bool:
     if not (
         p.startswith("NQ_EBP_")
         or p.startswith("ES_EBP_")
+        or p.startswith("NQ_SILVER_BULLET_")
+        or p.startswith("ES_SILVER_BULLET_")
+        or p.startswith("GC_")
         or "_TTFM_" in p
     ):
         return True
@@ -675,7 +715,13 @@ def run_profile(profile: str, cfg: dict[str, Any], state: dict[str, Any]) -> dic
     optimizer_overrides = refined_optimizers(profile, previous_report) if failed_cycles > 0 and previous_report else None
 
     started = _now()
-    _status(state="RUNNING_PROFILE", active_profile=profile, active_round=failed_cycles + 1)
+    _status(
+        state="RUNNING_PROFILE",
+        active_profile=profile,
+        active_round=failed_cycles + 1,
+        matrix_index=int(cfg.get("_matrix_index") or 0),
+        matrix_total=int(cfg.get("_matrix_total") or 0),
+    )
     result = research_autopilot_bridge.start(
         profile,
         test_news=bool(cfg.get("test_news", True)),
@@ -713,6 +759,7 @@ def run_profile(profile: str, cfg: dict[str, Any], state: dict[str, Any]) -> dic
         "last_report_paths": paths,
         "last_analysis": analysis,
         "last_autopilot_report": report,
+        "matrix_generation": str(cfg.get("matrix_generation") or MATRIX_GENERATION),
     }
     _save_profile_state(state)
     return {"ok": True, "profile": profile, "verdict": verdict, "analysis": analysis, "paths": paths}
@@ -766,9 +813,11 @@ def daemon() -> None:
             profiles = [p for p in cfg.get("profiles") or [] if p in available]
             ran = False
             completed_profiles = []
-            for profile in profiles:
+            for matrix_index, profile in enumerate(profiles, 1):
                 if not _due(profile, state, cfg):
                     continue
+                cfg["_matrix_index"] = matrix_index
+                cfg["_matrix_total"] = len(profiles)
                 if not _databento_ready_for(profile):
                     state.setdefault("profiles", {}).setdefault(profile, {}).update({
                         "profile": profile,
