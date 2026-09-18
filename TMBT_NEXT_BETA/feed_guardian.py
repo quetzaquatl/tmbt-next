@@ -14,6 +14,7 @@ WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\\Projekt model\\Trading_M
 HERE = Path(__file__).resolve().parent
 STATUS = WORKSPACE / "live_data" / "tmbt_feed_guardian_status.json"
 TWELVE_STATUS = WORKSPACE / "live_data" / "twelve_status.json"
+DATA_SETTINGS = WORKSPACE / "live_data" / "tmbt_data_settings.json"
 PID_FILE = HERE / "feed_guardian.pid"
 MASSIVE_PID = HERE / "massive_futures.pid"
 CHECK_SECONDS = max(15, int(os.environ.get("TMBT_FEED_GUARDIAN_SECONDS", "30")))
@@ -49,6 +50,21 @@ def write_status(**kwargs) -> None:
     cur.update(kwargs)
     cur["updated_at_utc"] = now_iso()
     write_json(STATUS, cur)
+
+
+def secret_env() -> dict[str, str]:
+    s = read_json(DATA_SETTINGS)
+    out: dict[str, str] = {}
+    twelve = str(s.get("twelve_api_key") or "").strip()
+    massive = str(s.get("massive_api_key") or "").strip()
+    if twelve:
+        # Support the common names used by Twelve collectors without exposing
+        # the key in the UI or Git repository.
+        for name in ("TWELVE_API_KEY", "TWELVEDATA_API_KEY", "TWELVE_DATA_API_KEY", "TMBT_TWELVE_API_KEY"):
+            out[name] = twelve
+    if massive:
+        out["MASSIVE_API_KEY"] = massive
+    return out
 
 
 def pid_alive(pid: Any) -> bool:
@@ -195,6 +211,7 @@ def discover_twelve_launcher() -> Path | None:
 def _spawn_file(path: Path) -> subprocess.Popen:
     ext = path.suffix.lower()
     env = os.environ.copy()
+    env.update(secret_env())
     env["TMBT_WORKSPACE"] = str(WORKSPACE)
     flags = 0
     if os.name == "nt":
@@ -228,6 +245,7 @@ def start_twelve_collector(reason: str) -> dict[str, Any]:
     try:
         if explicit_cmd:
             env = os.environ.copy()
+            env.update(secret_env())
             env["TMBT_WORKSPACE"] = str(WORKSPACE)
             flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
             p = subprocess.Popen(
@@ -295,7 +313,8 @@ def ensure_twelve() -> dict[str, Any]:
 
 def ensure_massive() -> dict[str, Any]:
     global _last_massive_start
-    api_key = os.environ.get("MASSIVE_API_KEY", "").strip()
+    saved = secret_env()
+    api_key = (saved.get("MASSIVE_API_KEY") or os.environ.get("MASSIVE_API_KEY", "")).strip()
     if not api_key:
         return {"enabled": False, "reason": "MASSIVE_API_KEY not set"}
     try:
@@ -313,7 +332,7 @@ def ensure_massive() -> dict[str, Any]:
         p = subprocess.Popen(
             [sys.executable, str(script)],
             cwd=str(HERE),
-            env=os.environ.copy(),
+            env={**os.environ.copy(), **secret_env()},
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=flags,
