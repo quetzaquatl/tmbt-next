@@ -11,6 +11,7 @@ import context_factors
 import historical_store
 import research_autopilot_bridge
 import research_sync_bridge
+import research_scheduler
 import smt_trade_management
 import server_ready as ready
 
@@ -206,7 +207,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.30-beta-git-window-fix"
+core.APP_VERSION = "0.9.31-beta-auto-research-lab"
 
 
 class Handler(ready.Handler):
@@ -232,6 +233,8 @@ class Handler(ready.Handler):
             return self.json(research_autopilot_bridge.latest_report())
         if u.path == "/api/research-sync/status":
             return self.json(research_sync_bridge.status())
+        if u.path == "/api/research-scheduler/status":
+            return self.json(research_scheduler.status())
         if u.path == "/api/trader-observations":
             try:
                 text = _OBSERVATIONS_FILE.read_text(encoding="utf-8", errors="ignore")
@@ -265,6 +268,10 @@ class Handler(ready.Handler):
                 return self.json(research_sync_bridge.start())
             if u.path == "/api/research-sync/stop":
                 return self.json(research_sync_bridge.stop())
+            if u.path == "/api/research-scheduler/start":
+                return self.json(research_scheduler.start_background())
+            if u.path == "/api/research-scheduler/stop":
+                return self.json(research_scheduler.stop())
             if u.path == "/api/data-settings":
                 if not payload:
                     return self.json({"error": "invalid_body"}, 400)
