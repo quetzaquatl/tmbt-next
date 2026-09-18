@@ -213,12 +213,45 @@ def archive_rows(limit=500):
         })
     return rows
 
+def outcome_trade_key(o):
+    """Stable identity for one logical trade across legacy/canonical history copies."""
+    alert_id = str(o.get("alert_id") or "").strip()
+    if alert_id:
+        return ("alert", alert_id)
+    def _v(name):
+        v = o.get(name)
+        if isinstance(v, float):
+            return round(v, 10)
+        return "" if v is None else str(v)
+    return (
+        "trade",
+        _v("model_id") or _v("model"),
+        _v("signal_time_utc") or _v("entry_time_utc"),
+        _v("side"),
+        _v("entry"),
+        _v("stop"),
+        _v("target"),
+    )
+
+def dedupe_outcomes(outs):
+    """Collapse duplicate outcome records for the same trade, preferring resolved/latest data."""
+    chosen = {}
+    for o in (outs or {}).values():
+        if not isinstance(o, dict):
+            continue
+        key = outcome_trade_key(o)
+        status = str(o.get("status") or "").upper()
+        resolved = o.get("outcome_r") is not None or status not in {"", "OPEN", "ACTIVE", "PENDING"}
+        rank = (1 if resolved else 0, str(o.get("updated_at_utc") or ""))
+        prev = chosen.get(key)
+        if prev is None or rank >= prev[0]:
+            chosen[key] = (rank, o)
+    return [x[1] for x in chosen.values()]
+
 def outcome_summary():
     outs = outcome_map()
     groups = {}
-    for o in outs.values():
-        if not isinstance(o,dict):
-            continue
+    for o in dedupe_outcomes(outs):
         name = str(o.get("model") or o.get("model_id") or "Unknown")
         g = groups.setdefault(name, {"model":name,"signals":0,"closed":0,"open":0,"ambiguous":0,"net_r":0.0,"wins":0,"losses":0,"mfe":[],"mae":[]})
         g["signals"] += 1
