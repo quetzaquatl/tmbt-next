@@ -205,6 +205,7 @@ function renderOutcomes(){
    <details class="outcome-section" open><summary><b>Modelle & Timeframes</b><span>alle konfigurierten Instanzen, auch ohne Trades</span></summary>${outcomeInstanceTable(g.instances)}</details>
    <details class="outcome-section"><summary><b>Vergangene Trades</b><span>${(g.trades||[]).length} Trades · aufklappbar inkl. Logik</span></summary><div class="outcome-trades">${(g.trades||[]).length?(g.trades||[]).map(outcomeTradeHtml).join(""):'<div class="empty">Noch keine abgeschlossenen Trades für diese Gruppe.</div>'}</div></details>
   </article>`).join("");
+ host.querySelectorAll(".trade-chart-btn").forEach(btn=>btn.onclick=e=>{e.preventDefault();e.stopPropagation();openTradeReplay(btn.dataset.historyId,btn.dataset.phase)});
 }
 function perfMoney(v){
  if(v===null||v===undefined||v==="")return"—";const n=Number(v);if(!Number.isFinite(n))return"—";
