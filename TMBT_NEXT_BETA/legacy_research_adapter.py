@@ -408,6 +408,80 @@ def activate() -> dict[str, Any]:
     # result is explicitly NOT enough to become a live-review candidate.
     research_autopilot._validation_verdict = strict_validation_verdict
 
+    original_autopilot_run = research_autopilot.run
+
+    def run_with_full_history_audit(request: dict[str, Any]):
+        report = original_autopilot_run(request)
+        try:
+            profile_id = str(report.get("profile") or request.get("profile") or "")
+            profile = research_autopilot.PROFILES.get(profile_id) or {}
+            splits = report.get("splits") or {}
+            full_start = str(
+                splits.get("full_start")
+                or splits.get("development_start")
+                or ""
+            )
+            full_end = str(
+                splits.get("full_end")
+                or splits.get("holdout_end")
+                or splits.get("validation_end")
+                or ""
+            )
+            if profile and full_start and full_end:
+                research_autopilot._status(
+                    state="RUNNING",
+                    profile=profile_id,
+                    stage="full_history_audit",
+                    message="Full-history diagnostic · locked parameters",
+                )
+                locked = dict(report.get("selected_overrides") or {})
+                locked["execution_mode"] = "Bar conservative"
+                audit = research_autopilot._run_backtest(
+                    profile,
+                    full_start,
+                    full_end,
+                    "Full History Diagnostic",
+                    locked,
+                    "Autopilot: full-history diagnostic (reporting only)",
+                )
+                summary = audit.get("summary") or {}
+                research_autopilot._record_stage(
+                    report,
+                    "full_history_diagnostic",
+                    {
+                        "job_id": audit.get("job_id"),
+                        "run_id": audit.get("run_id"),
+                        "summary": summary,
+                        "overrides": locked,
+                        "start": full_start,
+                        "end": full_end,
+                        "reporting_only": True,
+                        "used_for_optimizer": False,
+                        "used_for_live_gate": False,
+                    },
+                )
+                report["full_history_summary"] = summary
+                report["full_history_diagnostic"] = {
+                    "start": full_start,
+                    "end": full_end,
+                    "reporting_only": True,
+                    "used_for_optimizer": False,
+                    "used_for_live_gate": False,
+                }
+                report["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+                research_autopilot.REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+                tmp = research_autopilot.REPORT_PATH.with_suffix(".tmp")
+                tmp.write_text(
+                    json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                    encoding="utf-8",
+                )
+                os.replace(tmp, research_autopilot.REPORT_PATH)
+        except Exception as exc:
+            report["full_history_audit_error"] = f"{type(exc).__name__}: {exc}"
+        return report
+
+    research_autopilot.run = run_with_full_history_audit
+
 
     _MODULES = {
         "root": root,
