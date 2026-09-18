@@ -213,7 +213,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.52-beta-ttfm-live-monitor"
+core.APP_VERSION = "0.9.53-beta-full-research-matrix"
 
 
 class Handler(ready.Handler):
