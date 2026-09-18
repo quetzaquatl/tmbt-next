@@ -2,16 +2,28 @@
 <html lang="de">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TMBT Next</title><link rel="stylesheet" href="styles.css?v=0931"><link rel="stylesheet" href="compat.css?v=0923"><link rel="stylesheet" href="layout_fix.css"><link rel="stylesheet" href="active_desk.css"><link rel="stylesheet" href="notification_center.css"><link rel="stylesheet" href="visual_refresh.css?v=0923">
+<title>TMBT Next</title><link rel="stylesheet" href="styles.css?v=0941"><link rel="stylesheet" href="compat.css?v=0923"><link rel="stylesheet" href="layout_fix.css"><link rel="stylesheet" href="active_desk.css"><link rel="stylesheet" href="notification_center.css"><link rel="stylesheet" href="visual_refresh.css?v=0923">
 </head>
 <body>
 <div id="app">
 <header class="topbar">
   <div class="brand"><div class="logo">T</div><div><b>TMBT NEXT</b><small id="version">loading…</small></div></div>
-  <div class="marketbar">
+  <nav class="workspace-nav" aria-label="TMBT Bereiche">
+    <button data-workspace-view="desk" class="active">Desk</button>
+    <button data-workspace-view="signals">Active</button>
+    <button data-workspace-view="radar">Monitor</button>
+    <button data-workspace-view="archive">Archive</button>
+    <button data-workspace-view="outcomes">Outcomes</button>
+    <button data-workspace-view="research">Research</button>
+    <button data-workspace-view="review">Review</button>
+    <button data-workspace-view="paper">Paper</button>
+    <button data-workspace-view="system">System</button>
+    <button data-workspace-view="logs">Logs</button>
+  </nav>
+  <div class="marketbar desk-top-control">
     <button data-market="NQ" class="active">NQ</button><button data-market="ES">ES</button><button data-market="XAU">XAU</button>
   </div>
-  <div class="tfbar">
+  <div class="tfbar desk-top-control">
     <button data-tf="5m">5m</button><button data-tf="15m">15m</button><button data-tf="30m">30m</button><button data-tf="1H" class="active">1H</button><button data-tf="4H">4H</button><button data-tf="1D">1D</button>
   </div>
   <div class="spacer"></div>
@@ -72,33 +84,55 @@
   </aside>
 </main>
 
-<div class="splitter-h" id="splitBottom"></div>
-<section class="bottom-panel">
-  <div class="bottom-tabs">
-    <button data-tab="signals" class="active">Active</button>
-    <button data-tab="radar">Monitor</button>
-    <button data-tab="archive">Archive</button>
-    <button data-tab="outcomes">Outcomes</button>
-    <button data-tab="research">Research</button>
-    <button data-tab="paper">Paper</button>
-    <button data-tab="system">System</button>
-    <button data-tab="logs">Logs</button>
-    <div class="spacer"></div><button id="bottomHide">⌄</button>
-  </div>
-  <div class="bottom-content">
-    <div class="tab active" id="tab-signals"><div id="signalsTable"></div></div>
-    <div class="tab" id="tab-radar"><div id="radarView" class="radar-view"><div class="empty">Background Monitor wird geladen…</div></div></div>
-    <div class="tab" id="tab-archive">
+<main id="workspacePages" class="workspace-pages" aria-live="polite">
+  <section class="workspace-page" data-workspace-page="signals">
+    <div class="page-head"><div><span class="page-kicker">LIVE</span><h2>Active Setups</h2><p>Aktive Modelle und Setups ohne Chart-Kompression.</p></div></div>
+    <div class="page-scroll"><div id="signalsTable"></div></div>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="radar">
+    <div class="page-head"><div><span class="page-kicker">MONITOR</span><h2>Background Monitor</h2><p>Wartende, blockierte und beobachtete Modelle.</p></div></div>
+    <div class="page-scroll"><div id="radarView" class="radar-view"><div class="empty">Background Monitor wird geladen…</div></div></div>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="archive">
+    <div class="page-head"><div><span class="page-kicker">HISTORY</span><h2>Archive</h2><p>Historische Modellzustände und Setups.</p></div></div>
+    <div class="page-scroll">
       <div class="filters"><input id="archiveSearch" placeholder="Model / Market / Status suchen…"><select id="archiveStage"><option value="">Alle Status</option><option>SIGNAL</option><option>CLOSED</option><option>EXPIRED</option><option>ARMED</option><option>WATCH</option></select><span id="archiveCount"></span></div>
       <div id="archiveTable"></div>
     </div>
-    <div class="tab" id="tab-outcomes"><div id="outcomeCards"></div></div>
-    <div class="tab" id="tab-research"><div id="researchList"></div></div>
-    <div class="tab" id="tab-paper"><div id="paperView"></div></div>
-    <div class="tab" id="tab-system"><div id="systemView" class="system-view"><div class="empty">Systemdiagnose wird geladen…</div></div></div>
-    <div class="tab" id="tab-logs"><pre id="logs">TMBT Next gestartet.</pre></div>
-  </div>
-</section>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="outcomes">
+    <div class="page-head"><div><span class="page-kicker">RESULTS</span><h2>Outcomes</h2><p>Ergebnisübersicht der Modelle.</p></div></div>
+    <div class="page-scroll"><div id="outcomeCards"></div></div>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="research">
+    <div class="page-head"><div><span class="page-kicker">LAB</span><h2>Research</h2><p>Backtests, Optimierung, Validation und Berichte auf voller Fläche.</p></div></div>
+    <div class="page-scroll"><div id="researchList"></div></div>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="review">
+    <div class="page-head"><div><span class="page-kicker">GATE</span><h2>Model Review</h2><p>Kandidaten mit bestandener Validation vor Paper/Live-Freigabe prüfen.</p></div></div>
+    <div class="page-scroll"><div id="reviewView"><div class="empty">Noch keine Review-Kandidaten geladen.</div></div></div>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="paper">
+    <div class="page-head"><div><span class="page-kicker">EXECUTION</span><h2>Paper Trading</h2><p>Demo-Ausführung und Trade-Management.</p></div></div>
+    <div class="page-scroll"><div id="paperView"></div></div>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="system">
+    <div class="page-head"><div><span class="page-kicker">OPS</span><h2>System</h2><p>Feeds, Provider, Diagnose und Laufzeitstatus.</p></div></div>
+    <div class="page-scroll"><div id="systemView" class="system-view"><div class="empty">Systemdiagnose wird geladen…</div></div></div>
+  </section>
+
+  <section class="workspace-page" data-workspace-page="logs">
+    <div class="page-head"><div><span class="page-kicker">DEBUG</span><h2>Logs</h2><p>Lokale UI- und Laufzeitmeldungen.</p></div></div>
+    <div class="page-scroll"><pre id="logs">TMBT Next gestartet.</pre></div>
+  </section>
+</main>
 
 <div id="notificationShade" class="notification-shade"></div>
 <aside id="notificationDrawer" class="notification-drawer" aria-hidden="true">
@@ -108,7 +142,7 @@
   <div id="notificationFoot" class="notif-foot"></div>
 </aside>
 <div id="toast"></div>
-<script src="app.js?v=0931"></script>
+<script src="app.js?v=0941"></script>
 <script src="original_compat.js?v=0923"></script>
 <script src="desk_patch.js"></script>
 <script src="layout_fix.js"></script>
