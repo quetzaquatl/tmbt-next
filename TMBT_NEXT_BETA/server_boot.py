@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import research_autopilot_bridge
+
 
 def workspace() -> Path:
     return Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
@@ -72,6 +74,18 @@ def start_feed_guardian() -> None:
         print("Feed guardian: start failed:", exc)
 
 
+def start_research_autopilot() -> None:
+    try:
+        result = research_autopilot_bridge.start()
+        st = result.get("status") or {}
+        if st.get("running"):
+            print("Research autopilot: running", st.get("pids"))
+        else:
+            print("Research autopilot: not running", result.get("reason") or st.get("legacy_status"))
+    except Exception as exc:
+        print("Research autopilot: start failed:", exc)
+
+
 def print_collector_status() -> None:
     st = read_json(collector_status_path())
     print("Original Twelve collector (owned by Old Studio):")
@@ -95,6 +109,7 @@ print("TMBT NEXT · ACTIVE DESK")
 print("========================================")
 print("Workspace:", workspace())
 start_feed_guardian()
+start_research_autopilot()
 print_collector_status()
 print("Guardian status:", guardian_status_path())
 print("Starting focused live desk + 6-instance EBP matrix: NQ/ES x 15m/30m/1H")
