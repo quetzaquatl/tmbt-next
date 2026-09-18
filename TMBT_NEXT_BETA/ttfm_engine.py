@@ -722,6 +722,9 @@ def _scalp_profile_trade(
         anchor = latest_closure_event(hist_to_i, int(cfg.ote_pivot_left), int(cfg.ote_pivot_right))
         if not anchor or anchor.side != daily_context:
             continue
+        # H1 close is one hour after its open; do not infer duration from a
+        # possible maintenance-gap spacing between neighboring bars.
+        anchor.close_time = anchor.candle_open_time + pd.Timedelta(hours=1)
 
         m15 = _aggregate(history, "15m", cfg.calendar_tz)
         segment = _filter_between(m15, anchor.candle_open_time, anchor.close_time)
