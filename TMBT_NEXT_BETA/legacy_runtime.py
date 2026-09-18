@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import legacy_runtime_patches
+
 HERE = Path(__file__).resolve().parent
 WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 RUNTIME_BASE = WORKSPACE / "runtime"
@@ -68,6 +70,7 @@ def ensure_runtime(force: bool = False) -> Path:
     marker = _read_json(MARKER)
     required = [RUNTIME_ROOT / "bt_core.py", RUNTIME_ROOT / "research_jobs.py", RUNTIME_ROOT / "research_autopilot.py"]
     if not force and marker.get("sha256") == digest and all(p.exists() for p in required):
+        legacy_runtime_patches.apply(RUNTIME_ROOT)
         return RUNTIME_ROOT
 
     RUNTIME_BASE.mkdir(parents=True, exist_ok=True)
@@ -96,6 +99,7 @@ def ensure_runtime(force: bool = False) -> Path:
             old = archive / f"old_studio_core_{stamp}"
             shutil.move(str(RUNTIME_ROOT), str(old))
         os.replace(tmp, RUNTIME_ROOT)
+        legacy_runtime_patches.apply(RUNTIME_ROOT)
     finally:
         if tmp.exists():
             shutil.rmtree(tmp, ignore_errors=True)
