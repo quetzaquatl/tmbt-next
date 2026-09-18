@@ -213,7 +213,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.54-beta-research-state-fix"
+core.APP_VERSION = "0.9.55-beta-research-telemetry"
 
 
 class Handler(ready.Handler):
