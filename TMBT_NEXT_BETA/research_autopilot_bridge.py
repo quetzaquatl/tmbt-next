@@ -4,35 +4,52 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import legacy_runtime
+
+HERE = Path(__file__).resolve().parent
 
 
 def workspace() -> Path:
     return Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 
 
-def old_root() -> Path:
-    return Path(os.environ.get(
-        "TMBT_OLD_STUDIO_ROOT",
-        r"D:\Projekt model\Trading_Model_Backtest_Studio_v3_7_DEV",
-    )).resolve()
+def root() -> Path:
+    return workspace() / "research_autopilot"
 
 
-def script_path() -> Path:
-    return Path(os.environ.get("TMBT_RESEARCH_AUTOPILOT_PATH", str(old_root() / "research_autopilot.py"))).resolve()
+def status_path() -> Path:
+    return root() / "status.json"
 
 
-def python_path() -> Path:
-    configured = os.environ.get("TMBT_RESEARCH_PYTHON")
-    if configured:
-        return Path(configured).resolve()
-    candidate = old_root() / ".venv" / "Scripts" / "python.exe"
-    return candidate if candidate.exists() else Path(sys.executable)
+def request_path() -> Path:
+    return root() / "request.json"
 
 
-def pid_path() -> Path:
-    return workspace() / "research_jobs" / "tmbt_research_autopilot.pid"
+def cancel_path() -> Path:
+    return root() / "cancel.requested"
+
+
+def log_path() -> Path:
+    return root() / "autopilot.log"
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        d = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _pid_alive(pid: Any) -> bool:
@@ -49,9 +66,8 @@ def _pid_alive(pid: Any) -> bool:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 timeout=4,
-                text=True,
             )
-            return str(pid) in (r.stdout or "")
+            return str(pid).encode("ascii") in (r.stdout or b"")
         except Exception:
             return False
     try:
@@ -61,139 +77,107 @@ def _pid_alive(pid: Any) -> bool:
         return False
 
 
-def _published_pid() -> int | None:
+def profiles() -> dict[str, Any]:
     try:
-        pid = int(pid_path().read_text(encoding="utf-8").strip())
-        return pid if _pid_alive(pid) else None
-    except Exception:
-        return None
-
-
-def _windows_worker_pids() -> list[int]:
-    if os.name != "nt":
-        return []
-    ps = (
-        "Get-CimInstance Win32_Process | "
-        "Where-Object { $_.CommandLine -match 'research_autopilot\.py' -and $_.CommandLine -match '--worker' } | "
-        "Select-Object -ExpandProperty ProcessId"
-    )
-    try:
-        r = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            timeout=8,
-            text=True,
-        )
-        return [int(x.strip()) for x in (r.stdout or "").splitlines() if x.strip().isdigit()]
-    except Exception:
-        return []
-
-
-def worker_pids() -> list[int]:
-    pids = _windows_worker_pids()
-    published = _published_pid()
-    if published and published not in pids:
-        pids.append(published)
-    return sorted(set(pids))
-
-
-def legacy_status() -> dict[str, Any]:
-    script = script_path()
-    py = python_path()
-    if not script.exists():
-        return {"ok": False, "error": f"missing autopilot script: {script}"}
-    try:
-        r = subprocess.run(
-            [str(py), str(script), "--status"],
-            cwd=str(script.parent),
-            env={**os.environ.copy(), "TMBT_WORKSPACE": str(workspace())},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=15,
-            text=True,
-        )
-        return {
-            "ok": r.returncode == 0,
-            "returncode": r.returncode,
-            "output": (r.stdout or "").strip()[-6000:],
-        }
+        from legacy_research_adapter import activate
+        mods = activate()
+        return mods["research_autopilot"].profiles()
     except Exception as exc:
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        return {"_error": {"label": f"{type(exc).__name__}: {exc}"}}
+
+
+def latest_report() -> dict[str, Any]:
+    return _read_json(root() / "latest_report.json")
 
 
 def status() -> dict[str, Any]:
-    pids = worker_pids()
-    return {
-        "running": bool(pids),
-        "pids": pids,
-        "script": str(script_path()),
-        "python": str(python_path()),
-        "workspace": str(workspace()),
-        "script_exists": script_path().exists(),
-        "legacy_status": legacy_status(),
+    st = _read_json(status_path())
+    pid = int(st.get("pid") or 0)
+    st["running"] = bool(st.get("running") and _pid_alive(pid))
+    st["pid"] = pid or None
+    st["workspace"] = str(workspace())
+    st["runtime"] = legacy_runtime.status()
+    st["worker"] = str(HERE / "legacy_autopilot_worker.py")
+    st["available_profiles"] = profiles()
+    st["latest_report"] = latest_report()
+    return st
+
+
+def start(profile: str, *, test_news: bool = True, tick_audit: bool = False) -> dict[str, Any]:
+    st = status()
+    if st.get("running"):
+        return {"started": False, "reason": "already_running", "status": st}
+
+    available = profiles()
+    if profile not in available or profile == "_error":
+        return {"started": False, "reason": f"unknown_profile:{profile}", "profiles": available}
+
+    legacy_runtime.ensure_runtime()
+    root().mkdir(parents=True, exist_ok=True)
+    cancel_path().unlink(missing_ok=True)
+    request = {
+        "profile": profile,
+        "test_news": bool(test_news),
+        # Databento purchase is OHLCV-1m. Do not claim tick-exact validation.
+        "tick_audit": bool(tick_audit),
+        "requested_at_utc": datetime.now(timezone.utc).isoformat(),
+        "requested_by": "TMBT Next",
     }
+    _write_json(request_path(), request)
 
-
-def start() -> dict[str, Any]:
-    current = worker_pids()
-    if current:
-        return {"started": False, "reason": "already_running", "pids": current, "status": status()}
-
-    script = script_path()
-    py = python_path()
-    if not script.exists():
-        return {"started": False, "reason": f"missing script: {script}", "status": status()}
-
-    pid_path().parent.mkdir(parents=True, exist_ok=True)
     flags = 0
     if os.name == "nt":
         flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    log = open(log_path(), "a", encoding="utf-8", buffering=1)
     try:
         proc = subprocess.Popen(
-            [str(py), str(script), "--worker"],
-            cwd=str(script.parent),
+            [sys.executable, str(HERE / "legacy_autopilot_worker.py")],
+            cwd=str(HERE),
             env={**os.environ.copy(), "TMBT_WORKSPACE": str(workspace())},
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
             creationflags=flags,
         )
-        pid_path().write_text(str(proc.pid), encoding="utf-8")
-        return {"started": True, "pid": proc.pid, "status": status()}
-    except Exception as exc:
-        return {"started": False, "reason": f"{type(exc).__name__}: {exc}", "status": status()}
+    except Exception:
+        log.close()
+        raise
+    _write_json(
+        status_path(),
+        {
+            "pid": proc.pid,
+            "running": True,
+            "state": "STARTING",
+            "profile": profile,
+            "started_at_utc": datetime.now(timezone.utc).isoformat(),
+            "message": "TMBT Next Research Autopilot startet",
+        },
+    )
+    return {"started": True, "pid": proc.pid, "profile": profile, "status": status()}
 
 
 def stop() -> dict[str, Any]:
-    pids = worker_pids()
-    stopped = []
-    errors = []
-    for pid in pids:
-        try:
-            if os.name == "nt":
-                r = subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], timeout=8)
-                if r.returncode == 0:
-                    stopped.append(pid)
-                else:
-                    errors.append({"pid": pid, "returncode": r.returncode})
-            else:
-                os.kill(pid, 15)
-                stopped.append(pid)
-        except Exception as exc:
-            errors.append({"pid": pid, "error": str(exc)})
-    try:
-        pid_path().unlink(missing_ok=True)
-    except Exception:
-        pass
-    return {"stopped": stopped, "errors": errors, "status": status()}
+    root().mkdir(parents=True, exist_ok=True)
+    cancel_path().write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+    st = _read_json(status_path())
+    st["cancel_requested"] = True
+    st["state"] = "CANCELLING" if st.get("running") else st.get("state", "STOPPED")
+    _write_json(status_path(), st)
+    return {"cancel_requested": True, "status": status()}
 
 
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("action", choices=["status", "start", "stop"], nargs="?", default="status")
+    p.add_argument("action", choices=["status", "start", "stop", "profiles"], nargs="?", default="status")
+    p.add_argument("--profile", default="NQ_EBP_H1")
     args = p.parse_args()
-    result = {"status": status(), "start": start, "stop": stop}
-    value = result["status"] if args.action == "status" else result[args.action]()
-    print(json.dumps(value, indent=2))
+    if args.action == "start":
+        value = start(args.profile)
+    elif args.action == "stop":
+        value = stop()
+    elif args.action == "profiles":
+        value = profiles()
+    else:
+        value = status()
+    print(json.dumps(value, ensure_ascii=False, indent=2, default=str))
