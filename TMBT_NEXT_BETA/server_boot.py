@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import research_autopilot_bridge
+import legacy_runtime
 
 
 def workspace() -> Path:
@@ -74,16 +75,21 @@ def start_feed_guardian() -> None:
         print("Feed guardian: start failed:", exc)
 
 
-def start_research_autopilot() -> None:
+def prepare_legacy_runtime() -> None:
     try:
-        result = research_autopilot_bridge.start()
-        st = result.get("status") or {}
-        if st.get("running"):
-            print("Research autopilot: running", st.get("pids"))
-        else:
-            print("Research autopilot: not running", result.get("reason") or st.get("legacy_status"))
+        root = legacy_runtime.ensure_runtime()
+        print("Migration runtime:", root)
+        print("Old Studio directory dependency: none")
     except Exception as exc:
-        print("Research autopilot: start failed:", exc)
+        print("Migration runtime unavailable:", exc)
+
+
+def print_research_status() -> None:
+    try:
+        st = research_autopilot_bridge.status()
+        print("Research autopilot:", st.get("state") or "idle", "· running:", bool(st.get("running")))
+    except Exception as exc:
+        print("Research autopilot status failed:", exc)
 
 
 def print_collector_status() -> None:
@@ -108,8 +114,9 @@ print("========================================")
 print("TMBT NEXT · ACTIVE DESK")
 print("========================================")
 print("Workspace:", workspace())
+prepare_legacy_runtime()
 start_feed_guardian()
-start_research_autopilot()
+print_research_status()
 print_collector_status()
 print("Guardian status:", guardian_status_path())
 print("Starting focused live desk + 6-instance EBP matrix: NQ/ES x 15m/30m/1H")
