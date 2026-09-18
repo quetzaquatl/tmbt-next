@@ -162,7 +162,13 @@ def _aggregate(df: pd.DataFrame, tf: str, tz_name: str) -> pd.DataFrame:
     ):
         if col in local.columns:
             agg[col] = fn
-    out = local.resample(rule, label="left", closed="left").agg(agg)
+    if tf == "1D":
+        # CME/COMEX Globex trading day: 18:00 ET -> 17:00 ET, with the
+        # maintenance hour left empty. Offset keeps Daily closures aligned to
+        # the futures session instead of arbitrary midnight calendar bars.
+        out = local.resample(rule, label="left", closed="left", offset="18h").agg(agg)
+    else:
+        out = local.resample(rule, label="left", closed="left").agg(agg)
     marker = "tick_count" if "tick_count" in out.columns else "mid_close"
     out = out[out[marker].notna()].copy()
     if marker == "tick_count":
@@ -171,19 +177,39 @@ def _aggregate(df: pd.DataFrame, tf: str, tz_name: str) -> pd.DataFrame:
     return out
 
 
-def _previous_local_days(bt_core, file_index, cache_root: Path, market: str, d: date, tz_name: str, count: int = 6) -> list[pd.DataFrame]:
+def _load_trading_day(bt_core, file_index, cache_root: Path, market: str, d: date, tz_name: str) -> pd.DataFrame:
+    """Load one Globex trading day ending on local date d at 18:00 ET.
+
+    Session convention for NQ/ES/GC research:
+    previous calendar day 18:00 ET -> current calendar day 18:00 ET.
+    The 17:00-18:00 ET maintenance gap simply contains no bars.
+    """
+    tz = ZoneInfo(tz_name)
+    start_local = pd.Timestamp(datetime.combine(d - timedelta(days=1), time(18, 0), tzinfo=tz))
+    end_local = pd.Timestamp(datetime.combine(d, time(18, 0), tzinfo=tz))
+    pieces = []
+    for cal_d in (d - timedelta(days=1), d):
+        x = bt_core.load_local_day_1m(file_index, cache_root, market, cal_d, tz_name)
+        if x is not None and not x.empty:
+            pieces.append(x)
+    if not pieces:
+        return pd.DataFrame()
+    x = pd.concat(pieces).sort_index()
+    return x[(x.index >= start_local.tz_convert("UTC")) & (x.index < end_local.tz_convert("UTC"))].copy()
+
+
+def _previous_trading_days(bt_core, file_index, cache_root: Path, market: str, d: date, tz_name: str, count: int = 8) -> list[pd.DataFrame]:
     frames: list[pd.DataFrame] = []
     cursor = d - timedelta(days=1)
     attempts = 0
-    while len(frames) < count and attempts < 20:
-        x = bt_core.load_local_day_1m(file_index, cache_root, market, cursor, tz_name)
+    while len(frames) < count and attempts < 24:
+        x = _load_trading_day(bt_core, file_index, cache_root, market, cursor, tz_name)
         if x is not None and not x.empty:
             frames.append(x)
         cursor -= timedelta(days=1)
         attempts += 1
     frames.reverse()
     return frames
-
 
 def _pivot_indices(bars: pd.DataFrame, kind: str, left: int = 2, right: int = 2) -> list[int]:
     if bars is None or len(bars) < left + right + 1:
@@ -616,7 +642,8 @@ def _daily_profile_trade(
         return None
 
     anchor_start = anchor.candle_open_time
-    anchor_end = anchor.close_time
+    anchor_end = day.index.min()
+    anchor.close_time = anchor_end
     confirm_all = _aggregate(history, spec["confirm_tf"], cfg.calendar_tz)
     confirm_segment = _filter_between(confirm_all, anchor_start, anchor_end)
     confirm = _find_cisd(
@@ -758,13 +785,13 @@ def backtest(
             if progress_cb:
                 progress_cb(di, total, d, len(trades))
             continue
-        day = bt_core.load_local_day_1m(file_index, cache_root, cfg.market, d, cfg.calendar_tz)
+        day = _load_trading_day(bt_core, file_index, cache_root, cfg.market, d, cfg.calendar_tz)
         if day is None or day.empty:
             if progress_cb:
                 progress_cb(di, total, d, len(trades))
             continue
 
-        prev = _previous_local_days(bt_core, file_index, cache_root, cfg.market, d, cfg.calendar_tz, 8)
+        prev = _previous_trading_days(bt_core, file_index, cache_root, cfg.market, d, cfg.calendar_tz, 8)
         history = pd.concat([*prev, day]).sort_index() if prev else day.copy()
 
         if spec["mode"] == "daily_expansion":
