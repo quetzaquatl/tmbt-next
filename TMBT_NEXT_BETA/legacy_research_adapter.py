@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import json
+import zipfile
 import math
 import os
 import sqlite3
@@ -366,9 +368,28 @@ def activate() -> dict[str, Any]:
         p = preset_dir / f"{stem}.json"
         try:
             x = json.loads(p.read_text(encoding="utf-8"))
-            return dict(x) if isinstance(x, dict) else {}
+            if isinstance(x, dict):
+                return dict(x)
         except Exception:
-            return {}
+            pass
+
+        # Self-heal from the immutable migration bundle if an extracted preset
+        # is missing/corrupt. This keeps the compatibility runtime reproducible
+        # and avoids requiring the retired Old Studio directory.
+        try:
+            bundle = legacy_runtime.bundle_path()
+            member = f"presets/{stem}.json"
+            if bundle.exists():
+                with zipfile.ZipFile(bundle, "r") as zf:
+                    raw = zf.read(member).decode("utf-8")
+                x = json.loads(raw)
+                if isinstance(x, dict):
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_text(json.dumps(x, ensure_ascii=False, indent=2), encoding="utf-8")
+                    return dict(x)
+        except Exception:
+            pass
+        return {}
 
     def _clone_preset(stem: str, *, market: str, tf: str, name: str | None = None) -> dict[str, Any]:
         payload = _read_runtime_preset(stem)
