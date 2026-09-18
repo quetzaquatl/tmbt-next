@@ -155,6 +155,38 @@ def discover_twelve_launcher() -> Path | None:
                     found[p.resolve()] = max(found.get(p.resolve(), -999), s)
         except Exception:
             continue
+    # Fallback for older Studio builds whose collector has a generic filename.
+    # Scan script contents only when the strong filename search found nothing.
+    if not found:
+        scanned = 0
+        for root in (WORKSPACE, WORKSPACE / "github_research_repo"):
+            if not root.exists():
+                continue
+            for pat in ("*.py", "*.bat", "*.cmd", "*.ps1"):
+                try:
+                    for p in root.rglob(pat):
+                        scanned += 1
+                        if scanned > 3000:
+                            break
+                        if not p.is_file():
+                            continue
+                        try:
+                            rp = p.resolve()
+                        except Exception:
+                            continue
+                        if HERE in rp.parents:
+                            continue
+                        s = _score_candidate(rp)
+                        # Generic filenames need strong content evidence before
+                        # they are trusted as a restart target.
+                        if s >= 12:
+                            found[rp] = max(found.get(rp, -999), s)
+                    if scanned > 3000:
+                        break
+                except Exception:
+                    continue
+            if scanned > 3000:
+                break
     if not found:
         return None
     return max(found.items(), key=lambda kv: kv[1])[0]
