@@ -634,7 +634,12 @@ def _due(profile: str, state: dict[str, Any], cfg: dict[str, Any]) -> bool:
 
 
 def _databento_ready_for(profile: str) -> bool:
-    if not (str(profile).startswith("NQ_EBP_") or str(profile).startswith("ES_EBP_")):
+    p = str(profile)
+    if not (
+        p.startswith("NQ_EBP_")
+        or p.startswith("ES_EBP_")
+        or "_TTFM_" in p
+    ):
         return True
     st = historical_store.status(WORKSPACE)
     return bool(st.get("db_exists") and str(st.get("state") or "").upper() == "COMPLETE")
