@@ -7,6 +7,27 @@ from pathlib import Path
 
 import legacy_research_adapter
 import research_autopilot_bridge
+import historical_store
+
+
+def _read_json_file(path: Path):
+    import json
+    try:
+        value = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def _read_scheduler_state(workspace: Path):
+    status = _read_json_file(workspace / "research_scheduler" / "status.json")
+    profiles = _read_json_file(workspace / "research_scheduler" / "profiles.json")
+    config = _read_json_file(workspace / "research_scheduler" / "config.json")
+    return {
+        "status": status,
+        "profiles": profiles.get("profiles", {}),
+        "config": config,
+    }
 
 
 def main() -> int:
@@ -63,6 +84,33 @@ def main() -> int:
     github_sync.autopilot_latest_report = lambda workspace=None: research_autopilot_bridge.latest_report()
     github_sync.autopilot_profiles = lambda: research_autopilot_bridge.profiles()
 
+    # Publish compact TMBT Next-only state so ChatGPT can evaluate current
+    # Databento readiness and automated research without raw market data.
+    original_publish_state = github_sync._publish_state
+
+    def publish_state_with_tmbt_next(repo):
+        changed = original_publish_state(repo)
+        changed |= github_sync._write_if_changed(
+            repo / "state" / "historical.json",
+            historical_store.status(github_sync.WORKSPACE),
+        )
+        changed |= github_sync._write_if_changed(
+            repo / "state" / "research_scheduler.json",
+            _read_scheduler_state(github_sync.WORKSPACE),
+        )
+        latest = _read_json_file(github_sync.WORKSPACE / "research_reports" / "latest.json")
+        if latest:
+            changed |= github_sync._write_if_changed(repo / "reports" / "latest.json", latest)
+            analysis = latest.get("analysis") or {}
+            profile = str(analysis.get("profile") or "").strip()
+            if profile:
+                changed |= github_sync._write_if_changed(
+                    repo / "reports" / f"{profile}_latest.json",
+                    latest,
+                )
+        return changed
+
+    github_sync._publish_state = publish_state_with_tmbt_next
     github_sync.daemon()
     return 0
 
