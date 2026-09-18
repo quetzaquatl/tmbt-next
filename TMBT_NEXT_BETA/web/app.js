@@ -154,6 +154,7 @@ function outcomeTradeHtml(t){
     <div><small>MFE</small><b>${t.mfe_r==null?"—":fmt(t.mfe_r,2)+"R"}</b></div>
     <div><small>MAE</small><b>${t.mae_r==null?"—":fmt(t.mae_r,2)+"R"}</b></div>
    </div>
+   <div class="outcome-chart-actions"><button class="trade-chart-btn" data-history-id="${esc(t.history_id)}" data-phase="entry">📸 Entry Snapshot</button><button class="trade-chart-btn" data-history-id="${esc(t.history_id)}" data-phase="result">🏁 Result Snapshot</button></div>
    ${l.reason?`<p class="outcome-trade-reason"><b>Setup/Outcome:</b> ${esc(l.reason)}</p>`:""}
    <div class="outcome-logic-grid">
     <section><h5>Kriterien beim Trade</h5>${criteria.length?`<ul>${criteria.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:'<p class="muted">Keine eingefrorenen Kriterien verfügbar.</p>'}</section>
