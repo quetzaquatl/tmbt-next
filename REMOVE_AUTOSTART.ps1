@@ -1,9 +1,10 @@
 $ErrorActionPreference = 'Stop'
-$TaskName = 'TMBT Next AutoStart'
-if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+$Startup = [Environment]::GetFolderPath('Startup')
+$AutoCmd = Join-Path $Startup 'TMBT_NEXT_AUTOSTART.cmd'
+if (Test-Path $AutoCmd) {
+    Remove-Item $AutoCmd -Force
     Write-Host 'TMBT Next Autostart entfernt.' -ForegroundColor Green
 } else {
-    Write-Host 'Kein TMBT Next Autostart-Task vorhanden.'
+    Write-Host 'Kein TMBT Next Autostart vorhanden.'
 }
 Read-Host 'Enter zum Schliessen'
