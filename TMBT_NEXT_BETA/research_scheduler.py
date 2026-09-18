@@ -282,8 +282,102 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
         step = total
         label = "Zyklus abgeschlossen"
 
-    pct = round(100.0 * step / max(total, 1), 1) if step else 0.0
     live_job = _live_research_job()
+    job_progress = dict(live_job.get("progress") or {}) if isinstance(live_job, dict) else {}
+    try:
+        inner_pct = max(0.0, min(100.0, float(job_progress.get("pct") or 0.0)))
+    except Exception:
+        inner_pct = 0.0
+
+    # Smooth model progress: a running technical subjob contributes fractional
+    # progress inside the current logical stage instead of leaving the outer
+    # card at e.g. 75% until the whole stage completes.
+    if step:
+        completed_before = max(0, step - 1)
+        if live_job.get("job_id") and inner_pct > 0:
+            pct = round(100.0 * (completed_before + inner_pct / 100.0) / max(total, 1), 1)
+        else:
+            pct = round(100.0 * step / max(total, 1), 1)
+    else:
+        pct = 0.0
+
+    profile_state = _read_json(PROFILE_STATE).get("profiles") or {}
+    generation = str(cfg.get("matrix_generation") or MATRIX_GENERATION)
+    matrix_total = int(scheduler_status.get("matrix_total") or len(configured_profiles))
+    matrix_completed = sum(
+        1 for name in configured_profiles
+        if str((profile_state.get(name) or {}).get("matrix_generation") or "") == generation
+    )
+    matrix_completed = min(matrix_completed, matrix_total) if matrix_total else matrix_completed
+    matrix_pct = round(100.0 * matrix_completed / max(matrix_total, 1), 1) if matrix_total else 0.0
+
+    matrix_index = int(
+        scheduler_status.get("matrix_index")
+        or ((configured_profiles.index(profile) + 1) if profile in configured_profiles else 0)
+    )
+
+    next_profile = None
+    if configured_profiles:
+        current_pos = configured_profiles.index(profile) if profile in configured_profiles else -1
+        ordered = configured_profiles[current_pos + 1:] + configured_profiles[: max(0, current_pos + 1)]
+        for candidate in ordered:
+            if candidate == profile:
+                continue
+            item = profile_state.get(candidate) or {}
+            if str(item.get("matrix_generation") or "") != generation:
+                next_profile = candidate
+                break
+    next_meta = profiles.get(next_profile) or {} if next_profile else {}
+
+    profile_started = _parse_dt(scheduler_status.get("profile_started_at_utc"))
+    profile_elapsed = max(0.0, (_now() - profile_started).total_seconds()) if profile_started else None
+
+    activity_candidates = [
+        _parse_dt(live_job.get("updated_at_utc")) if isinstance(live_job, dict) else None,
+        _parse_dt(auto.get("updated_at_utc") or auto.get("heartbeat_at_utc")),
+        _parse_dt(scheduler_status.get("updated_at_utc")),
+    ]
+    activity_candidates = [x for x in activity_candidates if x is not None]
+    last_activity = max(activity_candidates) if activity_candidates else None
+    activity_age = max(0.0, (_now() - last_activity).total_seconds()) if last_activity else None
+
+    scheduler_state = str(scheduler_status.get("state") or "").upper()
+    auto_state = str(auto.get("state") or "").upper()
+    if not scheduler_running and not auto_running:
+        display_state = "STOPPED"
+    elif live_job.get("stalled"):
+        display_state = "STALLED"
+    elif auto_running and step >= total and total > 0:
+        display_state = "FINALIZING"
+    elif auto_running or live_job.get("job_id"):
+        display_state = "RUNNING"
+    elif scheduler_state == "BETWEEN_PROFILES":
+        display_state = "NEXT_IN_QUEUE"
+    elif matrix_total and matrix_completed >= matrix_total:
+        display_state = "COMPLETED"
+    else:
+        display_state = "WAITING"
+
+    if live_job.get("job_id"):
+        current_action = str(
+            job_progress.get("message")
+            or job_progress.get("stage")
+            or live_job.get("kind")
+            or label
+        )
+    elif display_state == "FINALIZING":
+        current_action = "Ergebnisse werden finalisiert und Bericht/Gates geschrieben."
+    elif display_state == "NEXT_IN_QUEUE":
+        current_action = "Profil abgeschlossen · nächstes Modell wird vorbereitet."
+    elif display_state == "WAITING":
+        current_action = "Scheduler aktiv · wartet auf den nächsten Teiljob."
+    elif display_state == "COMPLETED":
+        current_action = "Aktuelle Research-Matrix vollständig abgeschlossen."
+    elif display_state == "STOPPED":
+        current_action = "Research-Scheduler ist gestoppt."
+    else:
+        current_action = label
+
     return {
         "profile": profile or None,
         "label": p.get("label") or profile or None,
@@ -292,19 +386,32 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
         "step": step,
         "total": total,
         "pct": pct,
+        "display_state": display_state,
+        "current_action": current_action,
         "running": bool(auto_running or scheduler_running),
         "autopilot_running": auto_running,
+        "autopilot_state": auto_state or None,
+        "autopilot_pid": auto.get("pid"),
         "scheduler_running": scheduler_running,
         "scheduler_state": scheduler_status.get("state"),
+        "scheduler_pid": scheduler_pid or None,
+        "scheduler_started_at_utc": scheduler_status.get("started_at_utc"),
+        "profile_started_at_utc": scheduler_status.get("profile_started_at_utc"),
+        "profile_elapsed_seconds": round(profile_elapsed, 1) if profile_elapsed is not None else None,
+        "last_activity_at_utc": last_activity.isoformat() if last_activity else None,
+        "last_activity_age_seconds": round(activity_age, 1) if activity_age is not None else None,
         "message": message,
         "news_tests_enabled": use_news,
         "live_job": live_job,
-        "matrix_index": int(
-            scheduler_status.get("matrix_index")
-            or ((configured_profiles.index(profile) + 1) if profile in configured_profiles else 0)
-        ),
-        "matrix_total": int(scheduler_status.get("matrix_total") or len(configured_profiles)),
-        "matrix_generation": str(cfg.get("matrix_generation") or MATRIX_GENERATION),
+        "matrix_index": matrix_index,
+        "matrix_total": matrix_total,
+        "matrix_completed": matrix_completed,
+        "matrix_remaining": max(0, matrix_total - matrix_completed),
+        "matrix_pct": matrix_pct,
+        "matrix_generation": generation,
+        "next_profile": next_profile,
+        "next_profile_label": next_meta.get("label") or next_profile,
+        "last_error": scheduler_status.get("last_error") or auto.get("last_error") or live_job.get("error"),
     }
 
 
@@ -748,6 +855,8 @@ def run_profile(profile: str, cfg: dict[str, Any], state: dict[str, Any]) -> dic
         active_round=failed_cycles + 1,
         matrix_index=int(cfg.get("_matrix_index") or 0),
         matrix_total=int(cfg.get("_matrix_total") or 0),
+        profile_started_at_utc=started.isoformat(),
+        last_profile_finished_at_utc=None,
     )
     result = research_autopilot_bridge.start(
         profile,
@@ -875,6 +984,8 @@ def daemon() -> None:
                         running=True,
                         state="BETWEEN_PROFILES",
                         active_profile=None,
+                        profile_started_at_utc=None,
+                        last_profile_finished_at_utc=_now_iso(),
                         completed_profiles_this_pass=completed_profiles,
                         last_result=res,
                         last_error="" if res.get("ok") else str(res.get("error") or ""),
@@ -891,6 +1002,8 @@ def daemon() -> None:
                         running=True,
                         state="BETWEEN_PROFILES",
                         active_profile=None,
+                        profile_started_at_utc=None,
+                        last_profile_finished_at_utc=_now_iso(),
                         completed_profiles_this_pass=completed_profiles,
                         last_error=f"{type(exc).__name__}: {exc}",
                     )
