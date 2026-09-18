@@ -214,20 +214,33 @@ def archive_rows(limit=500):
     return rows
 
 def outcome_trade_key(o):
-    """Stable identity for one logical trade across legacy/canonical history copies."""
-    alert_id = str(o.get("alert_id") or "").strip()
-    if alert_id:
-        return ("alert", alert_id)
+    """Stable identity for one logical trade across rescans and legacy/canonical copies.
+
+    alert_id is not sufficient: the same model trade can be re-imported/re-emitted
+    under a new alert/history id. A model + signal timestamp + side is the canonical
+    trade identity when available.
+    """
     def _v(name):
         v = o.get(name)
         if isinstance(v, float):
-            return round(v, 10)
-        return "" if v is None else str(v)
+            return round(v, 8)
+        return "" if v is None else str(v).strip()
+
+    model = _v("model_id") or _v("model")
+    signal_time = _v("signal_time_utc") or _v("entry_time_utc")
+    side = str(o.get("side") or "").strip().upper()
+    if model and signal_time and side:
+        return ("signal", model, signal_time, side)
+
+    alert_id = str(o.get("alert_id") or "").strip()
+    if alert_id:
+        return ("alert", alert_id)
+
     return (
         "trade",
-        _v("model_id") or _v("model"),
-        _v("signal_time_utc") or _v("entry_time_utc"),
-        _v("side"),
+        model,
+        signal_time,
+        side,
         _v("entry"),
         _v("stop"),
         _v("target"),
