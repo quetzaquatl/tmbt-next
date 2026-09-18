@@ -10,6 +10,7 @@ from typing import Any
 import historical_store
 import legacy_runtime
 import research_autopilot_bridge
+import research_sync_bridge
 
 WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 OLD_ROOT = Path(os.environ.get("TMBT_OLD_STUDIO_ROOT", r"D:\Projekt model\Trading_Model_Backtest_Studio_v3_7_DEV")).resolve()
@@ -62,6 +63,7 @@ def main() -> int:
 
     hist = historical_store.status(WORKSPACE)
     research = research_autopilot_bridge.status()
+    remote_sync = research_sync_bridge.status()
     old_processes = _old_processes()
     refs = _workspace_refs()
 
@@ -70,6 +72,7 @@ def main() -> int:
         "compatibility_runtime_ready": bool(runtime.get("runtime_exists")),
         "databento_db_ready": bool(hist.get("db_exists")),
         "research_profiles_ready": "NQ_EBP_H1" in (research.get("available_profiles") or {}) and "ES_EBP_H1" in (research.get("available_profiles") or {}),
+        "remote_research_sync_ready": bool(remote_sync.get("repo_exists") and remote_sync.get("accept_commands")),
         "no_running_old_studio_processes": len(old_processes) == 0,
         "no_workspace_config_references_to_old_root": len(refs) == 0,
     }
@@ -90,6 +93,7 @@ def main() -> int:
             "state": research.get("state"),
             "available_profiles": research.get("available_profiles"),
         },
+        "remote_research_sync": remote_sync,
         "old_root_processes": old_processes,
         "workspace_old_root_references": refs,
     }
