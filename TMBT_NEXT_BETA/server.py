@@ -261,39 +261,296 @@ def dedupe_outcomes(outs):
             chosen[key] = (rank, o)
     return [x[1] for x in chosen.values()]
 
-def outcome_summary():
-    outs = outcome_map()
-    groups = {}
-    for o in dedupe_outcomes(outs):
-        name = str(o.get("model") or o.get("model_id") or "Unknown")
-        g = groups.setdefault(name, {"model":name,"signals":0,"closed":0,"open":0,"ambiguous":0,"net_r":0.0,"wins":0,"losses":0,"mfe":[],"mae":[]})
-        g["signals"] += 1
+def _outcome_market(value, model_text=""):
+    z = (str(value or "") + " " + str(model_text or "")).upper()
+    if any(x in z for x in ("NQ", "US100", "QQQ", "NASDAQ")):
+        return "NQ"
+    if any(x in z for x in ("ES", "US500", "SPY", "S&P")):
+        return "ES"
+    if any(x in z for x in ("XAU", "GOLD", "GC")):
+        return "XAU"
+    return str(value or "").upper() or "OTHER"
+
+
+def _outcome_tf(value, model_text=""):
+    z = (str(value or "") + " " + str(model_text or "")).upper().replace(" ", "")
+    aliases = [
+        ("15M", "15m"), ("M15", "15m"),
+        ("30M", "30m"), ("M30", "30m"),
+        ("1H", "1H"), ("H1", "1H"), ("60M", "1H"),
+        ("4H", "4H"), ("H4", "4H"),
+        ("5M", "5m"), ("M5", "5m"),
+        ("1D", "1D"), ("D1", "1D"),
+    ]
+    raw = str(value or "").strip()
+    if raw:
+        r = raw.upper().replace(" ", "")
+        for token, canonical in aliases:
+            if token == r:
+                return canonical
+    for token, canonical in aliases:
+        if token in z:
+            return canonical
+    return raw or "—"
+
+
+def _outcome_family(model_text="", model_id=""):
+    z = (str(model_text or "") + " " + str(model_id or "")).lower()
+    if "silver bullet" in z:
+        return "Silver Bullet iFVG"
+    if "ote" in z and "bos" in z:
+        return "OTE BOS"
+    if "sweep" in z and "ifvg" in z:
+        return "Sweep iFVG"
+    if "ebp" in z:
+        return "EBP"
+    if "ifvg" in z:
+        return "iFVG"
+    label = str(model_text or model_id or "Model").strip()
+    for token in ("US100", "US500", "NQ", "ES", "XAU", "QQQ proxy", "SPY proxy", "LIVE", "15m", "30m", "1H", "H1", "5m"):
+        label = label.replace(token, " ")
+    return " ".join(label.split()) or "Model"
+
+
+def _outcome_group_key(market, family):
+    scope = "INDICES" if market in {"NQ", "ES"} else market
+    return f"{scope}|{family}"
+
+
+def _model_context_maps():
+    by_id, by_name = {}, {}
+    for m in normalize_models():
+        item = {
+            "model_id": str(m.get("id") or ""),
+            "model": str(m.get("name") or ""),
+            "market": _outcome_market(m.get("market"), m.get("name")),
+            "tf": _outcome_tf(m.get("tf"), m.get("name")),
+            "family": _outcome_family(m.get("name"), m.get("id")),
+            "logic": m.get("logic") or {},
+            "criteria": m.get("criteria") or [],
+        }
+        if item["model_id"]:
+            by_id[item["model_id"]] = item
+        if item["model"]:
+            by_name[item["model"]] = item
+    return by_id, by_name
+
+
+def _outcome_context(o, by_id, by_name):
+    mid = str(o.get("model_id") or "")
+    name = str(o.get("model") or o.get("name") or mid or "Model")
+    base = by_id.get(mid) or by_name.get(name) or {}
+    market = _outcome_market(o.get("market") or base.get("market"), name)
+    tf = _outcome_tf(o.get("tf") or o.get("timeframe") or base.get("tf"), name)
+    family = _outcome_family(name, mid)
+    return {
+        "model_id": mid or str(base.get("model_id") or ""),
+        "model": name,
+        "market": market,
+        "tf": tf,
+        "family": family,
+        "group_key": _outcome_group_key(market, family),
+    }
+
+
+def _outcome_stats(rows):
+    signals = len(rows)
+    closed = open_count = ambiguous = wins = losses = 0
+    net_r = 0.0
+    mfe, mae = [], []
+    for o in rows:
         st = str(o.get("status") or "").upper()
-        if st in {"OPEN","ACTIVE"}: g["open"] += 1
-        elif "AMBIG" in st: g["ambiguous"] += 1
-        elif st: g["closed"] += 1
+        if st in {"OPEN", "ACTIVE", "PENDING"}:
+            open_count += 1
+        elif "AMBIG" in st:
+            ambiguous += 1
+        elif st:
+            closed += 1
         r = o.get("outcome_r")
         if r is not None:
             try:
-                rv=float(r); g["net_r"] += rv
-                if rv > 0: g["wins"] += 1
-                elif rv < 0: g["losses"] += 1
-            except Exception: pass
-        for key,arr in [("mfe_r","mfe"),("mae_r","mae")]:
+                rv = float(r)
+                net_r += rv
+                if rv > 0:
+                    wins += 1
+                elif rv < 0:
+                    losses += 1
+            except Exception:
+                pass
+        for key, target in (("mfe_r", mfe), ("mae_r", mae)):
             try:
-                if o.get(key) is not None: g[arr].append(float(o.get(key)))
-            except Exception: pass
-    out=[]
-    for g in groups.values():
-        denom=g["wins"]+g["losses"]
-        g["winrate"]=(g["wins"]/denom*100.0) if denom else None
-        g["expectancy"]=(g["net_r"]/g["closed"]) if g["closed"] else None
-        g["avg_mfe"]=sum(g["mfe"])/len(g["mfe"]) if g["mfe"] else None
-        g["avg_mae"]=sum(g["mae"])/len(g["mae"]) if g["mae"] else None
-        g.pop("mfe",None); g.pop("mae",None)
-        out.append(g)
-    out.sort(key=lambda x:x["signals"], reverse=True)
+                if o.get(key) is not None:
+                    target.append(float(o.get(key)))
+            except Exception:
+                pass
+    denom = wins + losses
+    return {
+        "signals": signals,
+        "closed": closed,
+        "open": open_count,
+        "ambiguous": ambiguous,
+        "net_r": net_r,
+        "wins": wins,
+        "losses": losses,
+        "winrate": (wins / denom * 100.0) if denom else None,
+        "expectancy": (net_r / closed) if closed else None,
+        "avg_mfe": sum(mfe) / len(mfe) if mfe else None,
+        "avg_mae": sum(mae) / len(mae) if mae else None,
+    }
+
+
+def _logic_summary(row):
+    criteria = row.get("criteria") or []
+    logic = row.get("logic") or {}
+    crit_text = []
+    for x in criteria[:12]:
+        if isinstance(x, str):
+            crit_text.append(x)
+        elif isinstance(x, dict):
+            label = x.get("label") or x.get("name") or ""
+            detail = x.get("detail") or ""
+            status = x.get("status") or ""
+            text = " · ".join(str(v) for v in (status, label, detail) if v not in (None, ""))
+            if text:
+                crit_text.append(text)
+    logic_rows = []
+    if isinstance(logic, dict):
+        for k, v in list(logic.items())[:16]:
+            if isinstance(v, (dict, list)):
+                try:
+                    rendered = json.dumps(v, ensure_ascii=False, default=str)
+                except Exception:
+                    rendered = str(v)
+            else:
+                rendered = str(v)
+            logic_rows.append({"key": str(k), "value": rendered})
+    return {
+        "reason": row.get("reason") or "",
+        "criteria": crit_text,
+        "logic": logic_rows,
+    }
+
+
+def outcome_dashboard():
+    outs_map = outcome_map()
+    deduped = dedupe_outcomes(outs_map)
+    by_id, by_name = _model_context_maps()
+
+    groups = {}
+    instance_index = {}
+
+    def ensure_group(market, family):
+        key = _outcome_group_key(market, family)
+        if key not in groups:
+            groups[key] = {
+                "key": key,
+                "scope": "NQ + ES" if market in {"NQ", "ES"} else market,
+                "family": family,
+                "label": f"NQ + ES · {family}" if market in {"NQ", "ES"} else f"{market} · {family}",
+                "instances": [],
+                "_outcomes": [],
+                "trades": [],
+            }
+        return groups[key]
+
+    def ensure_instance(ctx):
+        group = ensure_group(ctx["market"], ctx["family"])
+        ikey = f'{ctx["market"]}|{ctx["tf"]}|{ctx["model_id"] or ctx["model"]}'
+        if ikey not in instance_index:
+            inst = {
+                "key": ikey,
+                "model_id": ctx["model_id"],
+                "model": ctx["model"],
+                "market": ctx["market"],
+                "tf": ctx["tf"],
+                "_outcomes": [],
+            }
+            instance_index[ikey] = inst
+            group["instances"].append(inst)
+        return group, instance_index[ikey]
+
+    # Always surface every currently configured model/timeframe, even with zero trades.
+    for m in normalize_models():
+        ctx = {
+            "model_id": str(m.get("id") or ""),
+            "model": str(m.get("name") or m.get("id") or "Model"),
+            "market": _outcome_market(m.get("market"), m.get("name")),
+            "tf": _outcome_tf(m.get("tf"), m.get("name")),
+            "family": _outcome_family(m.get("name"), m.get("id")),
+        }
+        ensure_instance(ctx)
+
+    # Add historical outcome-only instances as well.
+    for o in deduped:
+        ctx = _outcome_context(o, by_id, by_name)
+        group, inst = ensure_instance(ctx)
+        inst["_outcomes"].append(o)
+        group["_outcomes"].append(o)
+
+    # Build resolved historical trade rows and attach recorded logic/criteria.
+    archives = archive_rows(2500)
+    seen_trades = set()
+    for row in archives:
+        if row.get("outcome_r") is None and not row.get("outcome"):
+            continue
+        ctx = {
+            "model_id": str(row.get("model_id") or ""),
+            "model": str(row.get("model") or row.get("model_id") or "Model"),
+            "market": _outcome_market(row.get("market"), row.get("model")),
+            "tf": _outcome_tf(row.get("tf"), row.get("model")),
+            "family": _outcome_family(row.get("model"), row.get("model_id")),
+        }
+        group, _inst = ensure_instance(ctx)
+        trade_key = (
+            ctx["model_id"], row.get("event_time_utc"), row.get("side"),
+            row.get("entry"), row.get("outcome_r"), row.get("outcome"),
+        )
+        if trade_key in seen_trades:
+            continue
+        seen_trades.add(trade_key)
+        group["trades"].append({
+            "history_id": row.get("history_id"),
+            "snapshot_id": row.get("snapshot_id"),
+            "event_time_utc": row.get("event_time_utc"),
+            "model_id": ctx["model_id"],
+            "model": ctx["model"],
+            "market": ctx["market"],
+            "tf": ctx["tf"],
+            "side": row.get("side"),
+            "entry": row.get("entry"),
+            "sl": row.get("sl"),
+            "tp": row.get("tp"),
+            "planned_rr": row.get("rr"),
+            "outcome": row.get("outcome"),
+            "outcome_r": row.get("outcome_r"),
+            "mfe_r": row.get("mfe_r"),
+            "mae_r": row.get("mae_r"),
+            "logic_summary": _logic_summary(row),
+        })
+
+    out = []
+    for group in groups.values():
+        group["stats"] = _outcome_stats(group.pop("_outcomes"))
+        group["instances"].sort(key=lambda x: (x["market"], {"5m": 5, "15m": 15, "30m": 30, "1H": 60, "4H": 240, "1D": 1440}.get(x["tf"], 9999), x["model"]))
+        for inst in group["instances"]:
+            inst["stats"] = _outcome_stats(inst.pop("_outcomes"))
+        group["trades"].sort(key=lambda x: str(x.get("event_time_utc") or ""), reverse=True)
+        group["trades"] = group["trades"][:100]
+        out.append(group)
+
+    order = {"EBP": 1, "Silver Bullet iFVG": 2, "OTE BOS": 3, "Sweep iFVG": 4, "iFVG": 5}
+    out.sort(key=lambda x: (0 if x["scope"] == "NQ + ES" else 1, order.get(x["family"], 99), x["label"]))
     return out
+
+
+def outcome_summary():
+    # Backward-compatible flat summaries for any older clients.
+    rows = []
+    for group in outcome_dashboard():
+        s = dict(group.get("stats") or {})
+        s["model"] = group.get("label")
+        rows.append(s)
+    return rows
 
 def load_snapshot(snapshot_id):
     safe = "".join(ch for ch in str(snapshot_id) if ch.isalnum() or ch in "._-")
@@ -484,7 +741,7 @@ class Handler(BaseHTTPRequestHandler):
             if u.path=="/api/bootstrap": return self.json(bootstrap())
             if u.path=="/api/models": return self.json({"models":normalize_models(),"status":signal_status()})
             if u.path=="/api/archive": return self.json({"rows":archive_rows(int(q.get("limit",["500"])[0]))})
-            if u.path=="/api/outcomes": return self.json({"summary":outcome_summary(),"outcomes":outcome_map()})
+            if u.path=="/api/outcomes": return self.json({"summary":outcome_summary(),"groups":outcome_dashboard(),"outcomes":outcome_map()})
             if u.path=="/api/paper": return self.json(paper_payload())
             if u.path=="/api/research": return self.json({"jobs":research_jobs(int(q.get("limit",["20"])[0]))})
             if u.path=="/api/snapshot":
