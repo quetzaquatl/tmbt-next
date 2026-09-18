@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 import historical_store
+import ttfm_engine
 import legacy_runtime
 
 WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
@@ -271,6 +272,32 @@ def activate() -> dict[str, Any]:
 
     bt_core._backtest_ebp_h1_indices = backtest_ebp_multitimeframe
 
+    original_backtest = bt_core.backtest
+
+    def backtest_dispatch(file_index, cache_root: Path, cfg, start_date: date, end_date: date, news_df=None, progress_cb=None):
+        if ttfm_engine.profile_spec(str(cfg.model_type)):
+            return ttfm_engine.backtest(
+                bt_core,
+                file_index,
+                cache_root,
+                cfg,
+                start_date,
+                end_date,
+                news_df,
+                progress_cb,
+            )
+        return original_backtest(
+            file_index,
+            cache_root,
+            cfg,
+            start_date,
+            end_date,
+            news_df,
+            progress_cb,
+        )
+
+    bt_core.backtest = backtest_dispatch
+
     def load_file_index(workspace: Path, market: str, validate_exists: bool = True):
         idx = _databento_index(market)
         if idx:
@@ -368,10 +395,47 @@ def activate() -> dict[str, Any]:
             "force_exit_at_session_end": True,
         }
 
+    def _ttfm_preset(market: str, model_type: str, entry_tf: str) -> dict[str, Any]:
+        return {
+            "market": market,
+            "model_type": model_type,
+            "calendar_tz": "America/New_York",
+            "signal_tf": entry_tf,
+            "session_name": f"{model_type} · {market} Futures · All Day NY",
+            "session_start": "00:00",
+            "session_end": "23:59",
+            "session_tz": "America/New_York",
+            "side_mode": "Both",
+            "bias_mode": "Off",
+            "target_mode": "Fixed RR",
+            "target_rr": 2.0,
+            "min_target_rr": 2.0,
+            "max_trades_per_day": 1,
+            "execution_mode": "Bar conservative",
+            "news_mode": "Ignore",
+            "cisd_lookback": 8,
+            "cisd_max_bars": 6,
+            "ote_pivot_left": 2,
+            "ote_pivot_right": 2,
+            "stop_buffer_points": 0.0,
+            "force_exit_at_session_end": True,
+        }
+
     futures_presets = {}
     for market in ("NQ", "ES"):
         for tf, suffix in (("15m", "M15"), ("30m", "M30"), ("1H", "H1")):
             futures_presets[f"EBP_{suffix}_{market}_FUTURES.json"] = _ebp_preset(market, tf)
+
+    ttfm_preset_specs = (
+        ("D1_H1_M5", "TTFM D1-H1-M5", "5m"),
+        ("D1_H4_M15", "TTFM D1-H4-M15", "15m"),
+        ("H1_M15_M1", "TTFM H1-M15-M1", "1m"),
+    )
+    for market in ("NQ", "ES", "GC"):
+        for suffix, model_type, entry_tf in ttfm_preset_specs:
+            futures_presets[f"TTFM_{suffix}_{market}_FUTURES.json"] = _ttfm_preset(
+                market, model_type, entry_tf
+            )
     import json
     for name, payload in futures_presets.items():
         p = preset_dir / name
@@ -402,6 +466,39 @@ def activate() -> dict[str, Any]:
                 "preset": f"EBP_{suffix}_{market}_FUTURES",
                 "market": market,
                 "optimizers": [dict(x) for x in ebp_optimizers],
+            }
+
+    # TTFM public-core research. We only optimize the explicit TMBT
+    # implementation conventions, not undocumented/private indicator rules.
+    ttfm_optimizers = [
+        {
+            "name": "Protected-swing pivot confirmation",
+            "param1": "ote_pivot_left",
+            "values1": [1, 2, 3],
+            "param2": "ote_pivot_right",
+            "values2": [1, 2, 3],
+        },
+        {
+            "name": "CISD confirmation window × target",
+            "param1": "cisd_max_bars",
+            "values1": [4, 6, 8, 12],
+            "param2": "target_rr",
+            "values2": [2.0, 2.5, 3.0],
+        },
+    ]
+    ttfm_profiles = (
+        ("D1_H1_M5", "D1 → H1 → M5"),
+        ("D1_H4_M15", "D1 → H4 → M15"),
+        ("H1_M15_M1", "H1 → M15 → M1 Scalping"),
+    )
+    for market in ("NQ", "ES", "GC"):
+        market_label = "Gold Futures (GC)" if market == "GC" else f"{market} Futures"
+        for suffix, label in ttfm_profiles:
+            research_autopilot.PROFILES[f"{market}_TTFM_{suffix}"] = {
+                "label": f"{market_label} · TTFM {label}",
+                "preset": f"TTFM_{suffix}_{market}_FUTURES",
+                "market": market,
+                "optimizers": [dict(x) for x in ttfm_optimizers],
             }
 
     # Replace the migrated permissive validation gate. A merely positive net
@@ -489,6 +586,7 @@ def activate() -> dict[str, Any]:
         "bt_core": bt_core,
         "research_jobs": research_jobs,
         "research_autopilot": research_autopilot,
+        "ttfm_engine": ttfm_engine,
     }
     _PATCHED = True
     return _MODULES
