@@ -121,11 +121,11 @@ async function openArchive(hid,sid){const row=state.archive.find(x=>x.history_id
 function backLive(){state.mode="live";state.snapshot=null;$("#snapshotBanner").classList.remove("show");resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
 function renderOutcomes(){const arr=state.outcomes||[];$("#outcomeCards").className="outcome-grid";$("#outcomeCards").innerHTML=arr.length?arr.map(o=>`<div class="outcome-card"><h4>${esc(o.model)}</h4><div class="mini-grid"><div><small>Signals</small><b>${o.signals}</b></div><div><small>Winrate</small><b>${o.winrate==null?"—":fmt(o.winrate,1)+"%"}</b></div><div><small>Net R</small><b class="${o.net_r>0?"good":o.net_r<0?"bad":""}">${fmt(o.net_r,2)}R</b></div><div><small>Expectancy</small><b>${o.expectancy==null?"—":fmt(o.expectancy,2)+"R"}</b></div><div><small>Ø MFE</small><b>${o.avg_mfe==null?"—":fmt(o.avg_mfe,2)+"R"}</b></div><div><small>Ø MAE</small><b>${o.avg_mae==null?"—":fmt(o.avg_mae,2)+"R"}</b></div></div></div>`).join(""):'<div class="empty">Noch keine Outcome-Daten.</div>'}
 function perfMoney(v){
- const n=Number(v);if(!Number.isFinite(n))return"—";
+ if(v===null||v===undefined||v==="")return"—";const n=Number(v);if(!Number.isFinite(n))return"—";
  try{return new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(n)}catch{return n.toFixed(2)+" €"}
 }
-function perfPct(v,d=2){const n=Number(v);return Number.isFinite(n)?n.toFixed(d)+"%":"—"}
-function perfNum(v,d=2){const n=Number(v);return Number.isFinite(n)?n.toFixed(d):"—"}
+function perfPct(v,d=2){if(v===null||v===undefined||v==="")return"—";const n=Number(v);return Number.isFinite(n)?n.toFixed(d)+"%":"—"}
+function perfNum(v,d=2){if(v===null||v===undefined||v==="")return"—";const n=Number(v);return Number.isFinite(n)?n.toFixed(d):"—"}
 function perfEquitySvg(perf){
  const curve=perf?.equity_curve||[];if(curve.length<2)return'<div class="perf-chart-empty">Keine Equity-Daten verfügbar.</div>';
  const w=1000,h=230,p=30,vals=curve.map(x=>Number(x.balance_eur)).filter(Number.isFinite);
