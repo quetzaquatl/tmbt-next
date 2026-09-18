@@ -302,11 +302,15 @@ def query_bars(market="NQ", tf="1H", limit=500, source=None):
                 tfcol=pick_col(cols,["timeframe","interval","tf"],["timeframe","interval"])
                 scol=pick_col(cols,["source"],["source"])
                 vol=pick_col(cols,["volume","vol"],["volume"])
-                score=5+(2 if mcol else 0)+(2 if tfcol else 0)+(1 if scol else 0)
-                candidates.append((score,t,o,h,l,c,ts,close_ts,mcol,tfcol,scol,vol))
+                tickercol=pick_col(cols,["ticker"],["ticker"])
+                tickeridcol=pick_col(cols,["tickerid"],["tickerid"])
+                exchcol=pick_col(cols,["exchange"],["exchange"])
+                recvcol=pick_col(cols,["received_at_utc"],["received"])
+                score=5+(2 if mcol else 0)+(2 if tfcol else 0)+(1 if scol else 0)+(1 if tickeridcol else 0)
+                candidates.append((score,t,o,h,l,c,ts,close_ts,mcol,tfcol,scol,vol,tickercol,tickeridcol,exchcol,recvcol))
             candidates.sort(reverse=True, key=lambda x:x[0])
             for item in candidates:
-                _,t,o,h,l,c,ts,close_ts,mcol,tfcol,scol,vol=item
+                _,t,o,h,l,c,ts,close_ts,mcol,tfcol,scol,vol,tickercol,tickeridcol,exchcol,recvcol=item
                 where=[]; params=[]
                 if mcol:
                     where.append("upper(cast(%s as text)) in (%s)" % ('"'+mcol+'"', ",".join("?" for _ in aliases)))
@@ -324,6 +328,10 @@ def query_bars(market="NQ", tf="1H", limit=500, source=None):
                     f'"{mcol}" as market' if mcol else "null as market",
                     f'"{tfcol}" as tf' if tfcol else "null as tf",
                     f'"{vol}" as volume' if vol else "null as volume",
+                    f'"{tickercol}" as ticker' if tickercol else "null as ticker",
+                    f'"{tickeridcol}" as tickerid' if tickeridcol else "null as tickerid",
+                    f'"{exchcol}" as exchange' if exchcol else "null as exchange",
+                    f'"{recvcol}" as received_at_utc' if recvcol else "null as received_at_utc",
                 ]
                 q="select "+",".join(fields)+f' from "{safe}"'
                 if where: q+=" where "+" and ".join(where)
@@ -334,7 +342,13 @@ def query_bars(market="NQ", tf="1H", limit=500, source=None):
                 bars=[]
                 for r in reversed(rows):
                     try:
-                        bars.append({"t":r["t"],"close_t":r["close_t"],"o":float(r["o"]),"h":float(r["h"]),"l":float(r["l"]),"c":float(r["c"]),"v":r["volume"],"source":r["source"],"market":r["market"],"tf":r["tf"]})
+                        bars.append({
+                            "t":r["t"],"close_t":r["close_t"],
+                            "o":float(r["o"]),"h":float(r["h"]),"l":float(r["l"]),"c":float(r["c"]),
+                            "v":r["volume"],"source":r["source"],"market":r["market"],"tf":r["tf"],
+                            "ticker":r["ticker"],"tickerid":r["tickerid"],"exchange":r["exchange"],
+                            "received_at_utc":r["received_at_utc"],
+                        })
                     except Exception: pass
                 if bars:
                     return {"bars":bars,"db":str(db),"table":t,"source":bars[-1].get("source")}
