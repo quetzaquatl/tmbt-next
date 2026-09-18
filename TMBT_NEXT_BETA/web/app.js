@@ -118,7 +118,34 @@ function renderSignals(){const rows=state.models.map(m=>`<tr class="clickable" d
 function archiveFiltered(){const q=$("#archiveSearch")?.value.toLowerCase()||"",st=$("#archiveStage")?.value||"";return state.archive.filter(r=>(!st||String(r.stage)===st)&&(!q||[r.model,r.market,r.stage,r.side,r.reason].some(x=>String(x||"").toLowerCase().includes(q))))}
 function renderArchive(){if(!$("#archiveTable"))return;const arr=archiveFiltered();$("#archiveCount").textContent=`${arr.length} Einträge`;const rows=arr.map(r=>`<tr class="clickable" data-hid="${esc(r.history_id)}" data-sid="${esc(r.snapshot_id||"")}"><td>${r.snapshot_id?"📸":"—"}</td><td>${iso(r.event_time_utc)}</td><td>${esc(r.model)}</td><td>${esc(r.market)}</td><td>${esc(r.tf)}</td><td><span class="pill ${String(r.stage).toLowerCase()}">${esc(r.stage)}</span></td><td>${esc(r.side||"—")}</td><td>${fmt(r.entry,4)}</td><td>${fmt(r.sl,4)}</td><td>${fmt(r.tp,4)}</td><td>${r.outcome?esc(r.outcome):"—"}</td><td class="${Number(r.outcome_r)>0?"good":Number(r.outcome_r)<0?"bad":""}">${r.outcome_r==null?"—":fmt(r.outcome_r,2)+"R"}</td><td class="muted">${esc(r.reason||"")}</td></tr>`).join("");$("#archiveTable").innerHTML=`<table class="table"><thead><tr><th>Snap</th><th>Zeit</th><th>Model</th><th>Mkt</th><th>TF</th><th>Status</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Outcome</th><th>R</th><th>Grund</th></tr></thead><tbody>${rows}</tbody></table>`;$("#archiveTable").querySelectorAll("tr[data-hid]").forEach(r=>r.onclick=()=>openArchive(r.dataset.hid,r.dataset.sid))}
 async function openArchive(hid,sid){const row=state.archive.find(x=>x.history_id===hid);if(!row)return;if(!sid){toast("Für diesen Legacy-Eintrag existiert kein eingefrorener Snapshot.");return}try{const snap=await api(`/api/snapshot?id=${encodeURIComponent(sid)}`);state.snapshot=snap;state.mode="snapshot";state.bars=(snap.bars||[]).map(b=>({t:b.bar_open_ms??b.t,o:Number(b.open??b.o),h:Number(b.high??b.h),l:Number(b.low??b.l),c:Number(b.close??b.c)}));state.offset=0;state.viewCount=Math.min(140,Math.max(40,state.bars.length));state.yZoom=1;state.futureSpace=0;const sm=snap.model||{};state.market=sm.market||row.market||state.market;state.tf=sm.timeframe||row.tf||state.tf;state.selectedModel={id:row.model_id||hid,name:sm.label||row.model,status:sm.stage||row.stage,side:sm.side||row.side,entry:snap.arrays?.entry??row.entry,sl:snap.arrays?.stop??row.sl,tp:snap.arrays?.target??row.tp,rr:snap.arrays?.planned_rr??row.rr,message:sm.message||row.reason,criteria:snap.criteria||row.criteria,logic:snap.logic||row.logic,arrays:snap.arrays||{},validity:snap.validity||{}};$("#snapshotBanner").classList.add("show");$("#snapshotName").textContent=`${state.selectedModel.name} · ${iso(snap.event_time_utc)}`;$("#chartTitle").textContent=`${state.market} · ${state.tf} · Snapshot`;$("#chartSource").textContent=`eingefroren · ${sm.source||row.source||"—"}`;$("#selectedSetup").textContent=state.selectedModel.name;$("#selectedState").textContent=`${state.selectedModel.status} · ${state.selectedModel.side}`;renderInspector(state.selectedModel,snap);$("#chartEmpty").style.display=state.bars.length?"none":"grid";draw();toast("Snapshot geladen")}catch(e){toast("Snapshot konnte nicht geladen werden.");log(String(e))}}
-function backLive(){state.mode="live";state.snapshot=null;$("#snapshotBanner").classList.remove("show");resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
+async function openTradeReplay(hid,phase="entry"){
+ try{
+  const d=await api("/api/trade-replay?history_id="+encodeURIComponent(hid)+"&phase="+encodeURIComponent(phase));
+  state.snapshot=null;state.tradeReplay=d;state.mode="trade_replay";
+  state.market=d.market||state.market;state.tf=d.tf||state.tf;state.source=null;
+  state.bars=(d.bars||[]).map(b=>({t:b.bar_open_ms??b.t,o:Number(b.open??b.o),h:Number(b.high??b.h),l:Number(b.low??b.l),c:Number(b.close??b.c),v:b.volume??b.v}));
+  state.pd=d.pd||{};
+  state.selectedModel=Object.assign({},d.setup||{},{market:state.market,tf:state.tf});
+  state.offset=0;state.viewCount=Math.min(150,Math.max(45,state.bars.length));state.yZoom=1;state.futureSpace=0;
+  document.querySelectorAll(".marketbar button").forEach(b=>b.classList.toggle("active",b.dataset.market===state.market));
+  document.querySelectorAll(".tfbar button").forEach(b=>b.classList.toggle("active",b.dataset.tf===state.tf));
+  setWorkspaceView("desk");
+  $("#snapshotBanner").classList.add("show");
+  $("#snapshotModeLabel").textContent=phase==="result"?"TRADE REPLAY · RESULT":"TRADE REPLAY · ENTRY";
+  $("#snapshotName").textContent=(state.selectedModel.name||"Trade")+" · "+(d.quality||"REPLAY")+(d.outcome_r==null?"":" · "+fmt(d.outcome_r,2)+"R");
+  $("#backOutcome").style.display="";
+  $("#chartTitle").textContent=state.market+" · "+state.tf+" · "+(phase==="result"?"Result Replay":"Entry Snapshot");
+  $("#chartSource").textContent=(d.quality_note||"")+(d.cached?" · cached":"");
+  $("#selectedSetup").textContent=state.selectedModel.name||"Historical Trade";
+  $("#selectedState").textContent=(state.selectedModel.status||"REPLAY")+" · "+(state.selectedModel.side||"—");
+  renderInspector(state.selectedModel,{criteria:state.selectedModel.criteria||[],logic:state.selectedModel.logic||{}});
+  $("#chartEmpty").style.display=state.bars.length?"none":"grid";
+  draw();
+  toast(phase==="result"?"Result Snapshot geladen":"Entry Snapshot geladen");
+ }catch(e){toast("Trade-Snapshot konnte nicht geladen werden.");log(String(e))}
+}
+function backOutcomes(){state.tradeReplay=null;state.mode="live";$("#snapshotBanner").classList.remove("show");$("#backOutcome").style.display="none";$("#snapshotModeLabel").textContent="FROZEN SNAPSHOT";setWorkspaceView("outcomes");refreshOutcomes()}
+function backLive(){state.mode="live";state.snapshot=null;state.tradeReplay=null;$("#snapshotBanner").classList.remove("show");$("#backOutcome").style.display="none";$("#snapshotModeLabel").textContent="FROZEN SNAPSHOT";resetChartScale();loadBars();loadPD();if(state.selectedModel)renderInspector(state.selectedModel)}
 function outcomeStatsHtml(s){
  const x=s||{};
  return `<div class="outcome-stat-grid">
