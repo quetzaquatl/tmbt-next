@@ -135,6 +135,38 @@ def _pid_alive(pid: Any) -> bool:
         return False
 
 
+def _live_research_job() -> dict[str, Any]:
+    try:
+        mods = legacy_research_adapter.activate()
+        jobs = mods["research_jobs"].list_jobs(WORKSPACE, limit=25)
+        active = [
+            j for j in jobs
+            if str(j.get("state") or "").upper() in {"RUNNING", "QUEUED", "CANCELLING"}
+        ]
+        if not active:
+            return {}
+        active.sort(
+            key=lambda j: str(j.get("updated_at_utc") or j.get("created_at_utc") or ""),
+            reverse=True,
+        )
+        job = dict(active[0])
+        updated = _parse_dt(job.get("updated_at_utc") or job.get("created_at_utc"))
+        age = max(0.0, (_now() - updated).total_seconds()) if updated else None
+        p = dict(job.get("progress") or {})
+        return {
+            "job_id": job.get("job_id"),
+            "kind": job.get("kind"),
+            "state": job.get("state"),
+            "updated_at_utc": job.get("updated_at_utc"),
+            "heartbeat_age_seconds": round(age, 1) if age is not None else None,
+            "stalled": bool(age is not None and age > 180),
+            "progress": p,
+            "request": job.get("request") or {},
+        }
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
     auto = research_autopilot_bridge.status()
     profile = str(auto.get("profile") or _read_json(STATUS).get("active_profile") or "")
@@ -181,6 +213,7 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
         label = "Zyklus abgeschlossen"
 
     pct = round(100.0 * step / max(total, 1), 1) if step else 0.0
+    live_job = _live_research_job()
     return {
         "profile": profile or None,
         "label": p.get("label") or profile or None,
@@ -192,6 +225,7 @@ def _cycle_progress(cfg: dict[str, Any]) -> dict[str, Any]:
         "running": bool(auto.get("running")),
         "message": message,
         "news_tests_enabled": use_news,
+        "live_job": live_job,
     }
 
 
@@ -430,6 +464,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
         "original_validation": old_validation,
         "optimization_steps": _optimization_steps(report),
         "selected_overrides": report.get("selected_overrides") or {},
+        "data_splits": report.get("splits") or {},
         "holdout": report.get("holdout") or {},
         "policy": {
             "auto_live_promotion": False,
