@@ -217,10 +217,62 @@ function detectModelTransitions(){
   }
 }
 
+async function dataSettingsGet(){
+  const r=await fetch("/api/data-settings",{cache:"no-store"});
+  if(!r.ok)throw Error(String(r.status)+" /api/data-settings");
+  return r.json();
+}
+
+async function dataSettingsSave(payload){
+  const r=await fetch("/api/data-settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(d.error||String(r.status)+" /api/data-settings");
+  return d;
+}
+
+function dataSettingsPanel(s){
+  s=s||{};
+  const twelve=s.twelve_configured?'<span class="good">Gespeichert · ••••'+esc(s.twelve_last4||"")+'</span>':'<span class="bad">Nicht gespeichert</span>';
+  const massive=s.massive_configured?'<span class="good">Gespeichert · ••••'+esc(s.massive_last4||"")+'</span>':'<span class="muted">Nicht gespeichert</span>';
+  return '<div class="diag-api-card">'+
+    '<div class="diag-head"><div><b>Data / API</b><small>lokal gespeichert · Keys werden nie an den Browser zurückgegeben</small></div></div>'+
+    '<div class="diag-api-grid">'+
+      '<label><span>Twelve Data API Key</span><input id="twelveApiKey" type="password" autocomplete="new-password" placeholder="neuen Key eingeben"><small id="twelveKeyState">'+twelve+'</small></label>'+
+      '<label><span>Massive API Key <em>(optional)</em></span><input id="massiveApiKey" type="password" autocomplete="new-password" placeholder="später für echte NQ/ES Futures"><small id="massiveKeyState">'+massive+'</small></label>'+
+    '</div>'+
+    '<div class="diag-api-actions"><button id="saveApiSettings">API-Einstellungen speichern</button><button id="clearTwelveKey" class="ghost">Twelve Key löschen</button></div>'+
+    '<p class="diag-hint">Nach dem Speichern bleibt das Eingabefeld absichtlich leer. „Gespeichert · ••••xxxx“ bedeutet: Key ist lokal vorhanden. Der Feed Guardian nutzt ihn beim automatischen Collector-Start.</p>'+
+  '</div>';
+}
+
+function bindDataSettings(){
+  const save=document.querySelector("#saveApiSettings");
+  if(save)save.onclick=async()=>{
+    const twelve=(document.querySelector("#twelveApiKey")?.value||"").trim();
+    const massive=(document.querySelector("#massiveApiKey")?.value||"").trim();
+    if(!twelve&&!massive){toast("Keinen neuen API-Key eingegeben.");return}
+    save.disabled=true;
+    try{
+      const d=await dataSettingsSave({twelve_api_key:twelve,massive_api_key:massive});
+      const ti=document.querySelector("#twelveApiKey"),mi=document.querySelector("#massiveApiKey");if(ti)ti.value="";if(mi)mi.value="";
+      const s=d.settings||{},ts=document.querySelector("#twelveKeyState"),ms=document.querySelector("#massiveKeyState");
+      if(ts)ts.innerHTML=s.twelve_configured?'<span class="good">Gespeichert · ••••'+esc(s.twelve_last4||"")+'</span>':'<span class="bad">Nicht gespeichert</span>';
+      if(ms)ms.innerHTML=s.massive_configured?'<span class="good">Gespeichert · ••••'+esc(s.massive_last4||"")+'</span>':'<span class="muted">Nicht gespeichert</span>';
+      toast("API-Einstellungen gespeichert.");
+    }catch(e){toast("Speichern fehlgeschlagen: "+String(e))}finally{save.disabled=false}
+  };
+  const clear=document.querySelector("#clearTwelveKey");
+  if(clear)clear.onclick=async()=>{
+    if(!confirm("Gespeicherten Twelve API Key wirklich löschen?"))return;
+    clear.disabled=true;
+    try{await dataSettingsSave({clear_twelve:true});const ts=document.querySelector("#twelveKeyState");if(ts)ts.innerHTML='<span class="bad">Nicht gespeichert</span>';toast("Twelve API Key gelöscht.")}catch(e){toast("Löschen fehlgeschlagen: "+String(e))}finally{clear.disabled=false}
+  };
+}
 function renderDiagnostics(d){
   const host=document.querySelector("#systemView");if(!host)return;
   const markets=["NQ","ES","XAU"];
   let html='<div class="diag-head"><div><b>Original Pipeline Diagnostics</b><small>Feed, Studio-Funktionen, Workspace und Datenalter</small></div><button id="diagRefresh">Neu prüfen</button></div>';
+  html+=dataSettingsPanel(d.data_settings||{});
   html+='<div class="diag-grid">';
   for(const m of markets){
     const f=d.feeds?.[m]?.["5m"]||{};
@@ -235,12 +287,13 @@ function renderDiagnostics(d){
   html+=`</div><p class="diag-hint">${esc(d.hint||"")}</p>`;
   host.innerHTML=html;
   const r=document.querySelector("#diagRefresh");if(r)r.onclick=pollDiagnostics;
+  bindDataSettings();
 }
 
 async function pollDiagnostics(){
   const host=document.querySelector("#systemView");
   if(host && !host.dataset.loaded)host.innerHTML='<div class="empty">Systemdiagnose läuft…</div>';
-  try{const d=await api("/api/diagnostics");if(host)host.dataset.loaded="1";renderDiagnostics(d)}catch(e){if(host)host.innerHTML=`<div class="empty bad">Diagnose fehlgeschlagen: ${esc(e)}</div>`}
+  try{const [d,s]=await Promise.all([api("/api/diagnostics"),dataSettingsGet().catch(()=>({}))]);d.data_settings=s;if(host)host.dataset.loaded="1";renderDiagnostics(d)}catch(e){if(host)host.innerHTML=`<div class="empty bad">Diagnose fehlgeschlagen: ${esc(e)}</div>`}
 }
 
 function saveLayout(){
