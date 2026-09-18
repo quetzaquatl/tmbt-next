@@ -9,6 +9,7 @@ from pathlib import Path
 
 import research_autopilot_bridge
 import legacy_runtime
+import research_sync_bridge
 
 
 def workspace() -> Path:
@@ -84,6 +85,20 @@ def prepare_legacy_runtime() -> None:
         print("Migration runtime unavailable:", exc)
 
 
+def start_research_sync() -> None:
+    try:
+        result = research_sync_bridge.start()
+        st = result.get("status") or {}
+        print(
+            "Research remote sync:",
+            st.get("state") or result.get("reason") or "unknown",
+            "· running:", bool(st.get("running")),
+            "· remote:", st.get("remote") or "—",
+        )
+    except Exception as exc:
+        print("Research remote sync start failed:", exc)
+
+
 def print_research_status() -> None:
     try:
         st = research_autopilot_bridge.status()
@@ -116,6 +131,7 @@ print("========================================")
 print("Workspace:", workspace())
 prepare_legacy_runtime()
 start_feed_guardian()
+start_research_sync()
 print_research_status()
 print_collector_status()
 print("Guardian status:", guardian_status_path())
