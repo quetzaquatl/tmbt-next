@@ -13,6 +13,7 @@ from typing import Any
 import historical_store
 import legacy_research_adapter
 import research_autopilot_bridge
+import research_performance
 
 HERE = Path(__file__).resolve().parent
 WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\\Projekt model\\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
@@ -186,11 +187,29 @@ def status() -> dict[str, Any]:
     st["pid"] = pid or None
     cfg = load_config()
     st["config"] = cfg
-    st["profiles"] = _read_json(PROFILE_STATE).get("profiles", {})
+    profiles = _read_json(PROFILE_STATE).get("profiles", {})
+    # Enrich existing and future reports lazily from the persisted run artifacts.
+    # This also upgrades reports that were created before detailed analytics existed.
+    for item in profiles.values():
+        try:
+            report = item.get("last_autopilot_report") or {}
+            analysis = item.get("last_analysis") or {}
+            if report:
+                analysis = dict(analysis)
+                analysis["performance"] = research_performance.performance_bundle(report)
+                item["last_analysis"] = analysis
+        except Exception as exc:
+            item["performance_error"] = f"{type(exc).__name__}: {exc}"
+    st["profiles"] = profiles
     st["latest_report"] = _read_json(LATEST_REPORT)
     st["databento"] = historical_store.status(WORKSPACE)
     st["news"] = legacy_research_adapter.news_status()
     st["cycle_progress"] = _cycle_progress(cfg)
+    st["performance_defaults"] = {
+        "start_balance_eur": research_performance.DEFAULT_START_BALANCE_EUR,
+        "risk_pct_per_r": research_performance.DEFAULT_RISK_PCT,
+        "affects_strategy_logic": False,
+    }
     return st
 
 
@@ -297,6 +316,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
             "observations_used_for_optimization": False,
             "max_failed_cycles": max_failed_cycles,
         },
+        "performance": research_performance.performance_bundle(report),
     }
 
 
