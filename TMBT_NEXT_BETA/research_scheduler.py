@@ -29,7 +29,14 @@ LATEST_MD = REPORT_ROOT / "latest.md"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
-    "profiles": ["NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1", "ES_EBP_M15", "ES_EBP_M30", "ES_EBP_H1", "XAU_OTE_BOS", "XAU_SWEEP_IFVG"],
+    "profiles": [
+        "NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1",
+        "ES_EBP_M15", "ES_EBP_M30", "ES_EBP_H1",
+        "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
+        "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
+        "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
+        "XAU_OTE_BOS", "XAU_SWEEP_IFVG",
+    ],
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
     "poll_seconds": 60,
@@ -38,6 +45,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "tick_audit": False,
     "run_on_start": True,
     "auto_live_promotion": False,
+    "ttfm_public_core_enabled": True,
 }
 
 
@@ -100,6 +108,15 @@ def load_config() -> dict[str, Any]:
         elif p not in expanded:
             expanded.append(p)
     cfg["profiles"] = expanded
+    if bool(cfg.get("ttfm_public_core_enabled", True)):
+        ttfm_profiles = [
+            "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
+            "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
+            "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
+        ]
+        for p in ttfm_profiles:
+            if p not in cfg["profiles"]:
+                cfg["profiles"].append(p)
     cfg["poll_seconds"] = max(30, int(cfg.get("poll_seconds") or 60))
     cfg["cycle_hours_failed"] = max(1, int(cfg.get("cycle_hours_failed") or 24))
     cfg["cycle_hours_passed"] = max(24, int(cfg.get("cycle_hours_passed") or 168))
