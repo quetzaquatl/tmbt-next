@@ -27,6 +27,7 @@ REPORT_ROOT = WORKSPACE / "research_reports"
 LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
 MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
+SCHEDULER_GENERATION = "full-research-matrix-v1"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -287,6 +288,7 @@ def status() -> dict[str, Any]:
     pid = int(st.get("pid") or 0)
     st["running"] = bool(st.get("running") and _pid_alive(pid))
     st["pid"] = pid or None
+    st["expected_scheduler_generation"] = SCHEDULER_GENERATION
     cfg = load_config()
     st["config"] = cfg
     profiles = _read_json(PROFILE_STATE).get("profiles", {})
@@ -792,7 +794,15 @@ def daemon() -> None:
     if not _acquire_singleton():
         return
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
-    _status(pid=os.getpid(), running=True, state="IDLE", started_at_utc=_now_iso(), last_error="")
+    _status(
+        pid=os.getpid(),
+        running=True,
+        state="IDLE",
+        started_at_utc=_now_iso(),
+        last_error="",
+        scheduler_generation=SCHEDULER_GENERATION,
+        matrix_generation=MATRIX_GENERATION,
+    )
     try:
         while True:
             cfg = load_config()
@@ -885,6 +895,26 @@ def daemon() -> None:
 
 def start_background() -> dict[str, Any]:
     st = status()
+    if st.get("running") and st.get("scheduler_generation") != SCHEDULER_GENERATION:
+        # Recycle a scheduler started by an older TMBT build so new profile
+        # matrices/optimizer code take effect without manual Task Manager work.
+        pid = int(st.get("pid") or 0)
+        try:
+            if pid and _pid_alive(pid):
+                if os.name == "nt":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=10,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                else:
+                    os.kill(pid, 15)
+        except Exception:
+            pass
+        time.sleep(0.5)
+        st = status()
     if st.get("running"):
         return {"started": False, "reason": "already_running", "status": st}
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
@@ -904,7 +934,14 @@ def start_background() -> dict[str, Any]:
     except Exception:
         log.close()
         raise
-    _status(pid=proc.pid, running=True, state="STARTING", started_at_utc=_now_iso())
+    _status(
+        pid=proc.pid,
+        running=True,
+        state="STARTING",
+        started_at_utc=_now_iso(),
+        scheduler_generation=SCHEDULER_GENERATION,
+        matrix_generation=MATRIX_GENERATION,
+    )
     return {"started": True, "pid": proc.pid, "status": status()}
 
 
