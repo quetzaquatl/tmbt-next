@@ -45,8 +45,8 @@ def _suffix(tf: str) -> str:
 
 def _roots(workspace: Path):
     return [
-        workspace / "live" / "futures",
         workspace / "live_data" / "futures",
+        workspace / "live" / "futures",
         workspace / "github_research_repo" / "live" / "futures",
     ]
 
