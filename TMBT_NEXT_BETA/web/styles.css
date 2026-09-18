@@ -276,3 +276,33 @@ body.workspace-page-open .workspace-pages{display:block}
 .research-inner-progress .progress.sub{height:5px;margin-top:6px;opacity:.9}
 .research-split-line,.full-history-note{margin:9px 0;padding:7px 9px;border:1px solid #2a4056;border-radius:7px;background:#0d1722;color:#8ea3b8;font-size:9px}
 .full-history-note{border-color:#385632;background:#101b13;color:#a8d7a2}
+
+
+/* v0.9.55 — precise research runtime card */
+.research-cycle-card{padding:14px 16px!important}
+.research-cycle-head,.research-progress-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.research-cycle-head h4{margin:0 0 3px;font-size:13px}
+.research-cycle-head small{color:#7890aa;font-size:8px}
+.research-current-action{margin:10px 0;padding:9px 10px;border:1px solid #2a415a;border-radius:8px;background:#0c1621}
+.research-current-action small{display:block;color:#678099;font-size:7px;letter-spacing:.12em}
+.research-current-action b{display:block;margin-top:3px;color:#d8e8f6;font-size:10px}
+.research-dual-progress{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.research-dual-progress section{padding:9px 10px;border:1px solid #21344a;border-radius:8px;background:#0b141e}
+.research-progress-head b{font-size:9px;color:#c9d8e7}
+.research-progress-head span{font-size:8px;color:#8fa4b8}
+.research-dual-progress section>small{display:block;margin-top:4px;color:#6f849a;font-size:8px}
+.progress.matrix i{background:linear-gradient(90deg,#7c53d8,#b98cff)}
+.research-runtime-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:7px;margin-top:10px}
+.research-runtime-grid>div{padding:8px 9px;border:1px solid #203247;border-radius:7px;background:#09121b}
+.research-runtime-grid>div.wide{grid-column:span 2}
+.research-runtime-grid small{display:block;color:#6f849a;font-size:7px}
+.research-runtime-grid b{display:block;margin-top:3px;color:#cbdbea;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.research-inner-progress{margin-top:10px;padding:9px 10px;border:1px solid #21354b;border-radius:8px;background:#0a131d}
+.research-inner-progress.muted{font-size:8px;color:#73889e}
+.research-inner-progress .progress.sub{height:5px;margin:7px 0 0}
+.research-cycle-error{margin-top:9px;padding:8px 10px;border:1px solid #6b303b;border-radius:7px;background:#1a0e13;color:#ff8a97;font-size:8px}
+@media(max-width:1100px){
+ .research-dual-progress{grid-template-columns:1fr}
+ .research-runtime-grid{grid-template-columns:repeat(2,minmax(130px,1fr))}
+ .research-runtime-grid>div.wide{grid-column:span 2}
+}
