@@ -7,7 +7,7 @@ set "TMBT_NEXT_PORT=8510"
 
 echo.
 echo =========================================
-echo TMBT NEXT BETA 0.9.53 FULL RESEARCH MATRIX
+echo TMBT NEXT BETA 0.9.54 RESEARCH STATE FIX
 echo =========================================
 echo Workspace: %TMBT_WORKSPACE%
 echo URL: http://127.0.0.1:%TMBT_NEXT_PORT%
@@ -25,7 +25,7 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":%TMBT_NEXT_PORT% .*LI
 del /q next_ui.pid >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-start "" "http://127.0.0.1:%TMBT_NEXT_PORT%/?v=0953"
+start "" "http://127.0.0.1:%TMBT_NEXT_PORT%/?v=0954"
 py -3 server_boot.py
 if errorlevel 1 python server_boot.py
 pause
