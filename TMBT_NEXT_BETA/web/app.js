@@ -29,7 +29,8 @@ function detailsStateKey(el){
  const parts=[];let cur=el;
  while(cur&&cur.tagName==="DETAILS"){
   const s=cur.querySelector(":scope > summary");
-  parts.unshift(String(s?.textContent||"details").replace(/\s+/g," ").trim());
+  const stable=s?.querySelector(":scope > b")?.textContent||s?.textContent||"details";
+  parts.unshift(String(stable).replace(/\s+/g," ").trim());
   cur=cur.parentElement?.closest("details");
  }
  return parts.join(" › ");
