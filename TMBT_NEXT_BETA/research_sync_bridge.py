@@ -13,7 +13,7 @@ WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Mod
 CONFIG = WORKSPACE / "github_sync_config.json"
 STATUS = WORKSPACE / "github_sync_status.json"
 DEFAULT_REPO = WORKSPACE / "github_research_repo"
-WORKER_GENERATION = "rebase-sync-v4"
+WORKER_GENERATION = "merge-recovery-v5"
 
 
 def _win_no_window() -> int:
