@@ -13,6 +13,7 @@ WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Mod
 CONFIG = WORKSPACE / "github_sync_config.json"
 STATUS = WORKSPACE / "github_sync_status.json"
 DEFAULT_REPO = WORKSPACE / "github_research_repo"
+WORKER_GENERATION = "hidden-git-console-v2"
 
 
 def _win_no_window() -> int:
@@ -135,6 +136,8 @@ def status() -> dict[str, Any]:
         "publish_live": bool(cfg.get("publish_live", False)),
         "heartbeat": heartbeat,
         "worker": str(HERE / "legacy_github_sync_worker.py"),
+        "worker_generation": st.get("worker_generation"),
+        "expected_worker_generation": WORKER_GENERATION,
     })
     return st
 
@@ -142,6 +145,29 @@ def status() -> dict[str, Any]:
 def start() -> dict[str, Any]:
     cfg = ensure_config()
     st = status()
+    if st.get("running") and st.get("worker_generation") != WORKER_GENERATION:
+        # A TMBT update can change how the detached sync worker launches Git.
+        # Recycle an already-running pre-update daemon once so it loads the new
+        # no-console implementation instead of keeping old code in memory.
+        pid = int(st.get("pid") or 0)
+        try:
+            if pid and _pid_alive(pid):
+                if os.name == "nt":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=10,
+                        creationflags=_win_no_window(),
+                    )
+                else:
+                    os.kill(pid, 15)
+        except Exception:
+            pass
+        base = _read_json(STATUS)
+        base.update({"running": False, "state": "restarting_after_update"})
+        _write_json(STATUS, base)
+        st = status()
     if st.get("running"):
         return {"started": False, "reason": "already_running", "status": st}
     if not cfg.get("enabled"):
@@ -170,6 +196,7 @@ def start() -> dict[str, Any]:
         "pid": proc.pid,
         "running": True,
         "state": "starting",
+        "worker_generation": WORKER_GENERATION,
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "last_error": "",
     })
