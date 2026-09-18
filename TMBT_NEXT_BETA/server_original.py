@@ -66,9 +66,9 @@ def _age_text(age):
 
 def _twelve_roots():
     roots = [
-        core.WORKSPACE / "github_research_repo" / "live" / "twelve",
-        core.WORKSPACE / "live" / "twelve",
         core.WORKSPACE / "live_data" / "twelve",
+        core.WORKSPACE / "live" / "twelve",
+        core.WORKSPACE / "github_research_repo" / "live" / "twelve",
     ]
     out = []
     for p in roots:
