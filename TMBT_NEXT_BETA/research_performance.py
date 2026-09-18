@@ -279,8 +279,9 @@ def performance_for_run(
         "monthly": _monthly_stats(frame),
         "equity_curve": curve,
     }
-    _CACHE.clear()
     _CACHE[key] = result
+    while len(_CACHE) > 32:
+        _CACHE.pop(next(iter(_CACHE)))
     return result
 
 
