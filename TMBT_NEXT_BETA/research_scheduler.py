@@ -544,6 +544,27 @@ def _save_profile_state(data: dict[str, Any]) -> None:
     _write_json(PROFILE_STATE, data)
 
 
+def _refresh_stored_classifications(state: dict[str, Any], cfg: dict[str, Any]) -> bool:
+    changed = False
+    for item in (state.get("profiles") or {}).values():
+        report = item.get("last_autopilot_report") or {}
+        if not report:
+            continue
+        analysis = analyze_report(
+            report,
+            failed_cycles=int(item.get("failed_cycles") or 0),
+            max_failed_cycles=int(cfg["max_failed_cycles"]),
+        )
+        new_state = analysis.get("candidate_state")
+        new_verdict = analysis.get("verdict")
+        if item.get("candidate_state") != new_state or item.get("last_verdict") != new_verdict:
+            item["candidate_state"] = new_state
+            item["last_verdict"] = new_verdict
+            item["last_analysis"] = analysis
+            changed = True
+    return changed
+
+
 def _due(profile: str, state: dict[str, Any], cfg: dict[str, Any]) -> bool:
     item = (state.get("profiles") or {}).get(profile) or {}
     if item.get("candidate_state") == "REVIEW_REQUIRED":
@@ -677,6 +698,8 @@ def daemon() -> None:
                 continue
 
             state = _profile_state()
+            if _refresh_stored_classifications(state, cfg):
+                _save_profile_state(state)
             available = research_autopilot_bridge.profiles()
             profiles = [p for p in cfg.get("profiles") or [] if p in available]
             ran = False
