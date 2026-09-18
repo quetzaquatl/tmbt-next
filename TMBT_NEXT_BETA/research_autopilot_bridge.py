@@ -95,6 +95,15 @@ def latest_report() -> dict[str, Any]:
     return _read_json(root() / "latest_report.json")
 
 
+def research_requirements(profile: str) -> dict[str, int]:
+    p = str(profile).upper()
+    if p.startswith("NQ_EBP_") or p.startswith("ES_EBP_"):
+        return {"min_dev_trades": 250, "min_val_trades": 100}
+    if p.startswith("XAU_"):
+        return {"min_dev_trades": 80, "min_val_trades": 30}
+    return {"min_dev_trades": 100, "min_val_trades": 50}
+
+
 def status() -> dict[str, Any]:
     st = _read_json(status_path())
     pid = int(st.get("pid") or 0)
@@ -130,11 +139,15 @@ def start(
     cancel_path().unlink(missing_ok=True)
     news = legacy_research_adapter.news_status()
     effective_test_news = bool(test_news and news.get("ready"))
+    requirements = research_requirements(profile)
     request = {
         "profile": profile,
         "test_news_requested": bool(test_news),
         "test_news": effective_test_news,
         "news_status": news,
+        "min_dev_trades": requirements["min_dev_trades"],
+        "min_val_trades": requirements["min_val_trades"],
+        "review_gate_version": "strict-live-v2",
         # Databento purchase is OHLCV-1m. Do not claim tick-exact validation.
         "tick_audit": bool(tick_audit),
         "requested_at_utc": datetime.now(timezone.utc).isoformat(),
