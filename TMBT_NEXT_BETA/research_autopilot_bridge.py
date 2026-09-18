@@ -13,6 +13,10 @@ import legacy_runtime
 HERE = Path(__file__).resolve().parent
 
 
+def _win_no_window() -> int:
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+
+
 def workspace() -> Path:
     return Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 
@@ -125,9 +129,7 @@ def start(profile: str, *, test_news: bool = True, tick_audit: bool = False) -> 
     }
     _write_json(request_path(), request)
 
-    flags = 0
-    if os.name == "nt":
-        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    flags = _win_no_window()
     log = open(log_path(), "a", encoding="utf-8", buffering=1)
     try:
         proc = subprocess.Popen(
