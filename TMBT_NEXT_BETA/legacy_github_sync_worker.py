@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import os
+import subprocess
 from pathlib import Path
 
 import legacy_research_adapter
@@ -19,6 +21,27 @@ def main() -> int:
     github_sync.CONFIG_PATH = github_sync.WORKSPACE / "github_sync_config.json"
     github_sync.STATUS_PATH = github_sync.WORKSPACE / "github_sync_status.json"
     github_sync.LOG_PATH = github_sync.WORKSPACE / "github_sync.log"
+
+    # The migrated daemon polls Git every few seconds. In a detached Windows
+    # process, plain subprocess.run() can flash a console window. Keep every Git
+    # command hidden while preserving the original behavior and return object.
+    if os.name == "nt":
+        def hidden_run_git(repo, args, timeout=60, check=True):
+            git = github_sync._git_executable()
+            if not git:
+                raise RuntimeError("git_not_found")
+            cp = subprocess.run(
+                [git, "-C", str(repo), *args],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            if check and cp.returncode != 0:
+                msg = (cp.stderr or cp.stdout or "git command failed").strip()[:1500]
+                raise RuntimeError(msg)
+            return cp
+        github_sync._run_git = hidden_run_git
 
     # Old github_sync used research_autopilot.start_process(), which would spawn
     # the legacy script without our Databento adapter. Route remote autopilot
