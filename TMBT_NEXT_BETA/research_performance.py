@@ -297,6 +297,7 @@ def performance_bundle(report: dict[str, Any]) -> dict[str, Any]:
     candidate = _stage(report, "optimized_development_candidate")
     news = _stage(report, "forex_factory_selection")
     validation = _stage(report, "validation")
+    full_history = _stage(report, "full_history_diagnostic")
 
     selected_news = (news.get("selected") or {}) if news else {}
     development_run = selected_news.get("run_id") or candidate.get("run_id")
@@ -310,4 +311,5 @@ def performance_bundle(report: dict[str, Any]) -> dict[str, Any]:
         "baseline": performance_for_run(baseline.get("run_id")),
         "development": performance_for_run(development_run),
         "validation": performance_for_run(validation.get("run_id")),
+        "full_history": performance_for_run(full_history.get("run_id")),
     }
