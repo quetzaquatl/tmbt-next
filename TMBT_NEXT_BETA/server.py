@@ -304,6 +304,8 @@ def _outcome_tf(value, model_text=""):
 
 def _outcome_family(model_text="", model_id=""):
     z = (str(model_text or "") + " " + str(model_id or "")).lower()
+    if "ttfm" in z or "fractal model" in z:
+        return "TTFM Fractal"
     if "silver bullet" in z:
         return "Silver Bullet iFVG"
     if "ote" in z and "bos" in z:
