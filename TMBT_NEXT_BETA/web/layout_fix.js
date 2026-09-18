@@ -104,16 +104,22 @@
   function auditLayout(logProblems=false){
     const a=rect(app),w=rect(workspace),s=rect(split),b=rect(bottom),c=rect(chartHost);
     const issues=[],tol=2;
-    if(!a||!w||!s||!b)issues.push('layout nodes missing');
+    if(!a||!w)issues.push('layout nodes missing');
     else{
-      if(w.bottom>s.top+tol)issues.push(`workspace overlaps splitter by ${Math.round(w.bottom-s.top)}px`);
-      if(s.bottom>b.top+tol)issues.push(`splitter overlaps bottom panel by ${Math.round(s.bottom-b.top)}px`);
-      if(b.bottom>a.bottom+tol)issues.push(`bottom panel exceeds app by ${Math.round(b.bottom-a.bottom)}px`);
+      // v0.9.41+ uses browser-style full-page workspace tabs; the legacy
+      // horizontal drawer/splitter may intentionally not exist anymore.
+      if(s&&b){
+        if(w.bottom>s.top+tol)issues.push(`workspace overlaps splitter by ${Math.round(w.bottom-s.top)}px`);
+        if(s.bottom>b.top+tol)issues.push(`splitter overlaps bottom panel by ${Math.round(s.bottom-b.top)}px`);
+        if(b.bottom>a.bottom+tol)issues.push(`bottom panel exceeds app by ${Math.round(b.bottom-a.bottom)}px`);
+      }else if(w.bottom>a.bottom+tol){
+        issues.push(`workspace exceeds app by ${Math.round(w.bottom-a.bottom)}px`);
+      }
       if(c&&c.bottom>w.bottom+tol)issues.push(`chart paints below workspace by ${Math.round(c.bottom-w.bottom)}px`);
       if(w.height<180)issues.push(`workspace too small (${Math.round(w.height)}px)`);
       if(c&&c.width<320)issues.push(`chart too narrow (${Math.round(c.width)}px)`);
     }
-    const result={ok:issues.length===0,issues,bottom:Math.round(current()),left:Math.round(currentLeft()),right:Math.round(currentRight()),maxBottom:Math.round(maxBottom()),viewport:{w:window.innerWidth,h:window.innerHeight}};
+    const result={ok:issues.length===0,issues,bottom:b?Math.round(current()):0,left:Math.round(currentLeft()),right:Math.round(currentRight()),maxBottom:b?Math.round(maxBottom()):0,viewport:{w:window.innerWidth,h:window.innerHeight}};
     window.__tmbtLayoutAudit=result;
     if(logProblems&&!result.ok&&typeof log==='function')log('Layout audit: '+issues.join(' | '));
     return result;
