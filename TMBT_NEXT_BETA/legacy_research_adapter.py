@@ -200,3 +200,57 @@ def activate() -> dict[str, Any]:
     }
     _PATCHED = True
     return _MODULES
+
+
+def news_status() -> dict[str, Any]:
+    """Describe the historical news dataset actually used by backtests."""
+    try:
+        mods = activate()
+        studio_bridge = mods["studio_bridge"]
+        bt_core = mods["bt_core"]
+        settings = studio_bridge.load_settings(WORKSPACE)
+        raw = str(settings.get("news_path") or "").strip()
+        if not raw:
+            return {
+                "configured": False,
+                "ready": False,
+                "path": "",
+                "rows": 0,
+                "reason": "news_path_not_configured",
+            }
+        path = Path(raw).expanduser()
+        if path.is_dir():
+            candidate = path / "forex_factory_usd_high_impact.csv"
+            if candidate.exists():
+                path = candidate
+        frame = bt_core.load_news(path)
+        if frame is None or frame.empty:
+            return {
+                "configured": True,
+                "ready": False,
+                "path": str(path),
+                "exists": path.exists(),
+                "rows": 0,
+                "reason": "news_file_missing_or_invalid",
+            }
+        dt = frame.get("datetime_utc")
+        first = str(dt.min()) if dt is not None else None
+        last = str(dt.max()) if dt is not None else None
+        return {
+            "configured": True,
+            "ready": True,
+            "path": str(path),
+            "exists": path.exists(),
+            "rows": int(len(frame)),
+            "first_utc": first,
+            "last_utc": last,
+            "reason": "",
+        }
+    except Exception as exc:
+        return {
+            "configured": False,
+            "ready": False,
+            "path": "",
+            "rows": 0,
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
