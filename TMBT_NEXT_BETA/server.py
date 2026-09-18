@@ -187,6 +187,14 @@ def archive_rows(limit=500):
             "snapshot_id": h.get("snapshot_id"),
             "created_at_utc": h.get("created_at_utc"),
             "event_time_utc": h.get("event_time_utc"),
+            "signal_time_utc": o.get("signal_time_utc") or h.get("event_time_utc"),
+            "entry_time_utc": o.get("entry_time_utc") or h.get("entry_time_utc") or h.get("event_time_utc"),
+            "exit_time_utc": (
+                o.get("exit_time_utc")
+                or o.get("closed_at_utc")
+                or o.get("resolved_at_utc")
+                or o.get("updated_at_utc")
+            ),
             "model_id": h.get("model_id"),
             "model": h.get("model"),
             "market": h.get("market"),
@@ -512,6 +520,9 @@ def outcome_dashboard():
             "history_id": row.get("history_id"),
             "snapshot_id": row.get("snapshot_id"),
             "event_time_utc": row.get("event_time_utc"),
+            "signal_time_utc": row.get("signal_time_utc"),
+            "entry_time_utc": row.get("entry_time_utc"),
+            "exit_time_utc": row.get("exit_time_utc"),
             "model_id": ctx["model_id"],
             "model": ctx["model"],
             "market": ctx["market"],
@@ -581,6 +592,240 @@ def normalize_tf(tf):
     z=str(tf).strip().lower()
     mp={"60m":"1h","1hr":"1h","1hour":"1h","h1":"1h","240m":"4h","h4":"4h","d":"1d","day":"1d","5min":"5m","15min":"15m"}
     return mp.get(z,z)
+
+def _trade_ms(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        x = float(value)
+        if x < 10_000_000_000:
+            x *= 1000.0
+        return int(x)
+    try:
+        s = str(value).strip()
+        if not s:
+            return None
+        if s.isdigit():
+            return _trade_ms(int(s))
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp() * 1000)
+    except Exception:
+        return None
+
+
+def _trade_bar_ms(bar):
+    for key in ("bar_open_ms", "t", "timestamp", "time"):
+        ms = _trade_ms((bar or {}).get(key))
+        if ms is not None:
+            return ms
+    return None
+
+
+def _trade_norm_bar(bar):
+    if not isinstance(bar, dict):
+        return None
+    try:
+        t = _trade_bar_ms(bar)
+        if t is None:
+            return None
+        o = float(bar.get("open", bar.get("o")))
+        h = float(bar.get("high", bar.get("h")))
+        l = float(bar.get("low", bar.get("l")))
+        cl = float(bar.get("close", bar.get("c")))
+        return {
+            "t": t,
+            "bar_open_ms": t,
+            "o": o,
+            "h": h,
+            "l": l,
+            "c": cl,
+            "v": bar.get("volume", bar.get("v")),
+            "source": bar.get("source"),
+            "market": bar.get("market"),
+            "tf": bar.get("tf"),
+        }
+    except Exception:
+        return None
+
+
+def _trade_merge_bars(*chunks):
+    chosen = {}
+    for chunk in chunks:
+        for raw in chunk or []:
+            b = _trade_norm_bar(raw)
+            if b is None:
+                continue
+            # Later chunks win so fresh local-cache bars replace frozen copies
+            # of the same candle during result replay.
+            chosen[int(b["t"])] = b
+    return [chosen[k] for k in sorted(chosen)]
+
+
+def _trade_find_row(history_id):
+    hid = str(history_id or "")
+    if not hid:
+        return None
+    for row in archive_rows(5000):
+        if str(row.get("history_id") or "") == hid:
+            return row
+    return None
+
+
+def _trade_replay_cache_path(history_id, phase):
+    safe = "".join(ch for ch in str(history_id or "") if ch.isalnum() or ch in "-_")[:180]
+    ph = "result" if str(phase).lower() == "result" else "entry"
+    return WORKSPACE / "live_signals" / "trade_snapshots" / f"{safe}_{ph}.json"
+
+
+def _trade_replay_cache_write(path, payload):
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def _trade_replay_window(bars, entry_ms, exit_ms, phase, tf):
+    if not bars:
+        return []
+    tf_ms = {
+        "1m": 60_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
+        "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000,
+    }.get(normalize_tf(tf), 900_000)
+    times = [_trade_bar_ms(x) for x in bars]
+    if phase == "entry":
+        end = (entry_ms or times[-1] or 0) + tf_ms
+        start = end - tf_ms * 90
+    else:
+        left = entry_ms or times[0] or 0
+        right = exit_ms or left + tf_ms * 30
+        start = left - tf_ms * 55
+        end = right + tf_ms * 22
+    out = [b for b, t in zip(bars, times) if t is not None and start <= t <= end]
+    return out or bars[-140:]
+
+
+def trade_replay_payload(history_id, phase="entry"):
+    phase = "result" if str(phase).lower() == "result" else "entry"
+    cached_path = _trade_replay_cache_path(history_id, phase)
+    cached = read_json(cached_path, None)
+    if isinstance(cached, dict) and cached.get("bars"):
+        cached["cached"] = True
+        return cached
+
+    row = _trade_find_row(history_id)
+    if not row:
+        return None
+
+    snap = load_snapshot(row.get("snapshot_id")) if row.get("snapshot_id") else {}
+    snap_bars = list((snap or {}).get("bars") or [])
+    entry_ms = (
+        _trade_ms(row.get("entry_time_utc"))
+        or _trade_ms(row.get("signal_time_utc"))
+        or _trade_ms(row.get("event_time_utc"))
+    )
+    exit_ms = _trade_ms(row.get("exit_time_utc"))
+    market = str(row.get("market") or ((snap or {}).get("model") or {}).get("market") or "NQ")
+    tf = str(row.get("tf") or ((snap or {}).get("model") or {}).get("timeframe") or "15m")
+    source = row.get("source")
+
+    local_bars = []
+    local_note = ""
+    if phase == "result":
+        try:
+            local = query_bars(market, tf, 5000, source)
+            local_bars = list(local.get("bars") or [])
+            local_note = str(local.get("note") or local.get("source") or "")
+        except Exception as exc:
+            local_note = f"{type(exc).__name__}: {exc}"
+
+    bars = _trade_merge_bars(snap_bars, local_bars if phase == "result" else [])
+    bars = _trade_replay_window(bars, entry_ms, exit_ms, phase, tf)
+
+    # Entry is exact whenever the original frozen setup snapshot is available.
+    # Result is exact only when the local source contains candles after entry.
+    max_ms = max((_trade_bar_ms(x) or 0 for x in bars), default=0)
+    exact_entry = bool(snap_bars)
+    exact_result = bool(
+        phase == "result"
+        and entry_ms
+        and max_ms > entry_ms
+        and local_bars
+    )
+    quality = "EXACT_FROZEN_ENTRY" if phase == "entry" and exact_entry else (
+        "EXACT_LOCAL_CONTINUATION" if exact_result else "PARTIAL_REPLAY"
+    )
+
+    sm = (snap or {}).get("model") or {}
+    arrays = dict((snap or {}).get("arrays") or {})
+    arrays.setdefault("entry", row.get("entry"))
+    arrays.setdefault("stop", row.get("sl"))
+    arrays.setdefault("target", row.get("tp"))
+    arrays.setdefault("planned_rr", row.get("rr"))
+
+    setup = {
+        "id": row.get("model_id") or row.get("history_id"),
+        "name": sm.get("label") or row.get("model") or "Historical trade",
+        "status": "RESULT" if phase == "result" else "ENTRY SNAPSHOT",
+        "side": sm.get("side") or row.get("side"),
+        "entry": arrays.get("entry"),
+        "sl": arrays.get("stop"),
+        "tp": arrays.get("target"),
+        "rr": arrays.get("planned_rr"),
+        "message": sm.get("message") or row.get("reason") or "",
+        "criteria": (snap or {}).get("criteria") or row.get("criteria") or [],
+        "logic": (snap or {}).get("logic") or row.get("logic") or {},
+        "arrays": arrays,
+        "validity": (snap or {}).get("validity") or {},
+    }
+
+    pd = {}
+    try:
+        pd = previous_period_level(bars, market)
+    except Exception:
+        pass
+
+    payload = {
+        "history_id": row.get("history_id"),
+        "snapshot_id": row.get("snapshot_id"),
+        "phase": phase,
+        "market": market,
+        "tf": tf,
+        "source": source,
+        "quality": quality,
+        "quality_note": (
+            "Original eingefrorener Trigger-Chart."
+            if quality == "EXACT_FROZEN_ENTRY"
+            else "Originale lokale Feed-Fortsetzung bis/über den Trade-Ausgang."
+            if quality == "EXACT_LOCAL_CONTINUATION"
+            else "Nur teilweise rekonstruierbar; fehlende Bars werden nicht durch einen anderen Markt ersetzt."
+        ),
+        "entry_time_utc": row.get("entry_time_utc") or row.get("event_time_utc"),
+        "exit_time_utc": row.get("exit_time_utc"),
+        "outcome": row.get("outcome"),
+        "outcome_r": row.get("outcome_r"),
+        "bars": bars,
+        "setup": setup,
+        "pd": pd,
+        "markers": {
+            "entry_ms": entry_ms,
+            "exit_ms": exit_ms,
+            "entry": row.get("entry"),
+            "exit": None,
+            "outcome": row.get("outcome"),
+            "outcome_r": row.get("outcome_r"),
+        },
+        "local_note": local_note,
+        "cached": False,
+    }
+    if bars:
+        _trade_replay_cache_write(cached_path, payload)
+    return payload
+
 
 def query_bars(market="NQ", tf="1H", limit=500, source=None):
     aliases=[x.upper() for x in MARKET_ALIASES.get(str(market).upper(),[market])]
@@ -748,6 +993,10 @@ class Handler(BaseHTTPRequestHandler):
             if u.path=="/api/snapshot":
                 sid=q.get("id",[""])[0]; snap=load_snapshot(sid)
                 return self.json(snap if snap else {"error":"snapshot_not_found"}, 200 if snap else 404)
+            if u.path=="/api/trade-replay":
+                hid=q.get("history_id",[""])[0]; phase=q.get("phase",["entry"])[0]
+                replay=trade_replay_payload(hid,phase)
+                return self.json(replay if replay else {"error":"trade_not_found"}, 200 if replay else 404)
             if u.path=="/api/bars":
                 market=q.get("market",["NQ"])[0]; tf=q.get("tf",["1H"])[0]
                 source=q.get("source",[None])[0]; limit=int(q.get("limit",["800"])[0])
