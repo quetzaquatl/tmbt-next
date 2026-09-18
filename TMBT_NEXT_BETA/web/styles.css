@@ -30,3 +30,5 @@ pre{margin:0;color:#91a2b8;white-space:pre-wrap}.empty{padding:16px;border:1px d
 body.left-collapsed{--left:0px}body.right-collapsed{--right:0px}body.bottom-collapsed{--bottom:36px}
 @media(max-width:1250px){:root{--left:218px;--right:328px}.brand{min-width:160px}.health{gap:4px}.chart-toolbar small{max-width:210px}}
 @media(max-width:1050px){:root{--left:205px;--right:300px;--bottom:155px}.health{display:none}.brand{min-width:145px}.old-studio{display:none}.chart-kicker{display:none}}
+
+.trader-notes{margin-bottom:10px;border-color:#31445b}.trader-notes summary{cursor:pointer;display:flex;gap:8px;align-items:center}.trader-notes summary small{color:var(--muted);font-weight:400}.trader-notes pre{white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;background:#0d1520;border:1px solid #243247;border-radius:7px;padding:10px;color:#aebdd0;font-family:inherit;font-size:10px;line-height:1.5}
