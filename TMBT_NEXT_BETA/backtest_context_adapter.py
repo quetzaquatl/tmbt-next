@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Callable
 
-from context_factors import ContextConfig, DEFAULT_CONFIG, evaluate_bars
+from context_factors import ContextConfig, DEFAULT_CONFIG, evaluate_bars, normalize_bars, _swing_state, _target_smt
 import smt_trade_management
 
 
@@ -119,11 +119,11 @@ def context_at(
         except Exception:
             ym_rows = []
         if ym_rows:
-            ts = evaluate_bars.__globals__["normalize_bars"](target_smt, as_of_ms)
-            ys = evaluate_bars.__globals__["normalize_bars"](ym_rows, as_of_ms)
-            target_state = evaluate_bars.__globals__["_swing_state"](ts, cfg)
-            ym_state = evaluate_bars.__globals__["_swing_state"](ys, cfg)
-            pair = evaluate_bars.__globals__["_target_smt"](
+            ts = normalize_bars(target_smt, as_of_ms)
+            ys = normalize_bars(ym_rows, as_of_ms)
+            target_state = _swing_state(ts, cfg)
+            ym_state = _swing_state(ys, cfg)
+            pair = _target_smt(
                 target,
                 "YM",
                 target_state,
