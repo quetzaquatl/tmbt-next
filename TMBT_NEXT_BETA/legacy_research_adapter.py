@@ -364,6 +364,106 @@ def activate() -> dict[str, Any]:
     preset_dir = root / "presets"
     preset_dir.mkdir(parents=True, exist_ok=True)
 
+    def _builtin_runtime_preset(stem: str) -> dict[str, Any]:
+        # Audited baseline presets from the migrated Old Studio source bundle.
+        # Used only if both extracted runtime and local migration zip lack them.
+        common_ifvg = {
+            "side_mode": "Both",
+            "bias_mode": "Off",
+            "sweep_min_points": 0.0,
+            "ifvg_inversion_max_bars": 12,
+            "ifvg_min_points": 0.0,
+            "ifvg_entry_depth_pct": 50.0,
+            "ifvg_displacement_atr_mult": 0.0,
+            "ifvg_require_sweep_reclaim": False,
+            "stop_buffer_points": 0.0,
+            "min_target_rr": 1.0,
+            "max_trades_per_day": 1,
+            "execution_mode": "Tick exact",
+            "news_mode": "Ignore",
+        }
+        presets = {
+            "OTE_BOS_XAU_15m_AUDIT": {
+                "market": "XAUUSD",
+                "model_type": "OTE Pure",
+                "calendar_tz": "Europe/Berlin",
+                "signal_tf": "15m",
+                "session_name": "OTE BOS XAU ALL DAY",
+                "session_start": "00:00",
+                "session_end": "23:59",
+                "session_tz": "Europe/Berlin",
+                "side_mode": "Both",
+                "bias_mode": "Off",
+                "ote_pivot_left": 2,
+                "ote_pivot_right": 2,
+                "ote_swing_mode": "BOS-confirmed impulse",
+                "ote_stop_anchor": "Executable side",
+                "ote_min_impulse_atr": 1.0,
+                "ote_entry_pct": 70.5,
+                "ote_zone_min_pct": 62.0,
+                "ote_zone_max_pct": 79.0,
+                "ote_retest_max_bars": 24,
+                "ote_target_mode": "Swing extreme",
+                "stop_buffer_points": 0.0,
+                "min_target_rr": 1.0,
+                "max_trades_per_day": 0,
+                "execution_mode": "Tick exact",
+                "news_mode": "Ignore",
+            },
+            "XAU_LONDON_SWEEP_iFVG_15_17": {
+                **common_ifvg,
+                "market": "XAUUSD",
+                "model_type": "XAU Range Sweep iFVG",
+                "calendar_tz": "Europe/Berlin",
+                "signal_tf": "5m",
+                "session_name": "XAU London Sweep iFVG 15-17 DE",
+                "session_start": "15:00",
+                "session_end": "17:00",
+                "session_tz": "Europe/Berlin",
+                "reference_name": "London 08-11",
+                "reference_start": "08:00",
+                "reference_end": "11:00",
+                "reference_tz": "Europe/Berlin",
+                "ifvg_lookback_bars": 18,
+                "ifvg_retest_max_bars": 12,
+            },
+            "SILVER_BULLET_USA500_iFVG": {
+                **common_ifvg,
+                "market": "USA500IDXUSD",
+                "model_type": "Silver Bullet iFVG",
+                "calendar_tz": "America/New_York",
+                "signal_tf": "1m",
+                "session_name": "AM Silver Bullet iFVG 10-11 NY",
+                "session_start": "10:00",
+                "session_end": "11:00",
+                "session_tz": "America/New_York",
+                "reference_name": "9AM Range",
+                "reference_start": "09:00",
+                "reference_end": "10:00",
+                "reference_tz": "America/New_York",
+                "ifvg_lookback_bars": 20,
+                "ifvg_retest_max_bars": 20,
+            },
+            "SILVER_BULLET_USATECH_iFVG": {
+                **common_ifvg,
+                "market": "USATECHIDXUSD",
+                "model_type": "Silver Bullet iFVG",
+                "calendar_tz": "America/New_York",
+                "signal_tf": "1m",
+                "session_name": "AM Silver Bullet iFVG 10-11 NY",
+                "session_start": "10:00",
+                "session_end": "11:00",
+                "session_tz": "America/New_York",
+                "reference_name": "9AM Range",
+                "reference_start": "09:00",
+                "reference_end": "10:00",
+                "reference_tz": "America/New_York",
+                "ifvg_lookback_bars": 20,
+                "ifvg_retest_max_bars": 20,
+            },
+        }
+        return dict(presets.get(stem) or {})
+
     def _read_runtime_preset(stem: str) -> dict[str, Any]:
         p = preset_dir / f"{stem}.json"
         try:
@@ -389,7 +489,13 @@ def activate() -> dict[str, Any]:
                     return dict(x)
         except Exception:
             pass
-        return {}
+        fallback = _builtin_runtime_preset(stem)
+        if fallback:
+            try:
+                p.write_text(json.dumps(fallback, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+        return fallback
 
     def _clone_preset(stem: str, *, market: str, tf: str, name: str | None = None) -> dict[str, Any]:
         payload = _read_runtime_preset(stem)
