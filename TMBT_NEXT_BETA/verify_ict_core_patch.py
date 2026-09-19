@@ -95,9 +95,10 @@ assert core_rule_gate("ICT_CORE_ORDER_BLOCK")["execution_allowed"] is False
 assert CORE_RULES["ICT_CORE_OTE_ZONE"]["machine_interpretation"]["ote_zone_min_pct"] == 62.0
 assert CORE_RULES["ICT_CORE_OTE_ZONE"]["machine_interpretation"]["ote_reference_pct"] == 70.5
 assert CORE_RULES["ICT_CORE_OTE_ZONE"]["machine_interpretation"]["ote_zone_max_pct"] == 79.0
-assert ict_core_knowledge.VISUAL_AUDIT_GAPS["CORE_OTE"]["status"] == "TEXT_CERTIFIED_NUMERIC"
-assert ict_core_knowledge.VISUAL_AUDIT_GAPS["CORE_FAIR_VALUE_GAP"]["status"] == "TEXT_CERTIFIED_GEOMETRY"
-assert all(str(x.get("status") or "").upper() != "LOCKED" for x in ict_core_knowledge.VISUAL_AUDIT_GAPS.values())
+assert ict_core_knowledge.SOURCE_AUDIT_STATUS["CORE_OTE"]["status"] == "TEXT_CERTIFIED_NUMERIC"
+assert ict_core_knowledge.SOURCE_AUDIT_STATUS["CORE_FAIR_VALUE_GAP"]["status"] == "TEXT_CERTIFIED_GEOMETRY"
+assert ict_core_knowledge.VISUAL_AUDIT_GAPS is ict_core_knowledge.SOURCE_AUDIT_STATUS
+assert all(str(x.get("status") or "").upper() != "LOCKED" for x in ict_core_knowledge.SOURCE_AUDIT_STATUS.values())
 
 pipe = profile_pipeline_contract("XAU_SWEEP_IFVG_H1")
 assert pipe["context"]["status"] == "SOURCE_AWARE"
