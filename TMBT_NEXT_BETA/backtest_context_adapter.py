@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from context_factors import ContextConfig, DEFAULT_CONFIG, evaluate_bars, normalize_bars, _swing_state, _target_smt
 import smt_trade_management
+import ict_rule_engine
 
 
 def load_local_databento_bars(market: str, timeframe: str, as_of_ms: int, limit: int) -> list[dict[str, Any]]:
@@ -104,6 +105,13 @@ def context_at(
         cfg=cfg,
     )
     ctx["symmetric_smt"] = smt_trade_management.symmetric_smt(ctx)
+    ctx["ict_source_snapshot"] = ict_rule_engine.snapshot(
+        target_5m,
+        market=target,
+        timeframe="5m",
+        as_of_ms=as_of_ms,
+        max_events=6,
+    )
 
     # Month-10 Index SMT uses ES/NQ/YM as a correlated basket. Keep the
     # existing NQ/ES gate unchanged for backwards compatibility, but add a
@@ -156,6 +164,13 @@ def flatten_context(ctx: dict[str, Any], market: str) -> dict[str, Any]:
     smt = ctx.get("smt") or {}
     symmetric = ctx.get("symmetric_smt") or smt_trade_management.symmetric_smt(ctx)
     symmetric_ym = ctx.get("symmetric_smt_ym") or {}
+    source = ctx.get("ict_source_snapshot") or {}
+    layers = source.get("layers") or {}
+    source_ctx = layers.get("context") or {}
+    source_evt = layers.get("event") or {}
+    dr = source_ctx.get("dealing_range") or {}
+    latest_fvg = source_evt.get("latest_fvg") or {}
+    latest_raid = source_evt.get("latest_liquidity_raid") or {}
     return {
         "ctx_bias": ctx.get("bias"),
         "ctx_quality": ctx.get("quality"),
@@ -190,6 +205,13 @@ def flatten_context(ctx: dict[str, Any], market: str) -> dict[str, Any]:
         "ctx_index_or_complete": levels.get("index_or_complete"),
         "ctx_index_am_active": levels.get("index_am_active"),
         "ctx_index_pm_active": levels.get("index_pm_active"),
+        "ctx_ict_dealing_location": dr.get("location"),
+        "ctx_ict_equilibrium": dr.get("equilibrium"),
+        "ctx_ict_latest_fvg_side": latest_fvg.get("side"),
+        "ctx_ict_latest_fvg_ce": latest_fvg.get("ce"),
+        "ctx_ict_latest_raid_side": latest_raid.get("liquidity_side"),
+        "ctx_ict_latest_raid_reference": latest_raid.get("reference_price"),
+        "ctx_ict_pipeline_version": source.get("pipeline_version"),
     }
 
 
