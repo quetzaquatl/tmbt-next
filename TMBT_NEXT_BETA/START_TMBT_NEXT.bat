@@ -7,7 +7,7 @@ set "TMBT_NEXT_PORT=8510"
 
 echo.
 echo =========================================
-echo TMBT NEXT BETA 0.9.56 READY BROWSER
+echo TMBT NEXT BETA 0.9.57 STARTUP RECOVERY
 echo =========================================
 echo Workspace: %TMBT_WORKSPACE%
 echo URL: http://127.0.0.1:%TMBT_NEXT_PORT%
