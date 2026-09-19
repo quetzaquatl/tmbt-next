@@ -48,6 +48,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "tick_audit": False,
     "run_on_start": True,
     "auto_live_promotion": False,
+    # Legacy key name retained for config compatibility: this means public
+    # TTrades material, not ICT 2016/17 Core Content.
     "ttfm_public_core_enabled": True,
     # Canonical/source-audited profiles run by default. Generated cross-timeframe
     # clones remain available, but are explicitly opt-in research variants.
