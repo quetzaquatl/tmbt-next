@@ -19,7 +19,7 @@ import ict_core_rules
 # SETUP/EXECUTION/RISK decision. Any model-specific convention remains explicit
 # TMBT research unless it has its own sourced rule.
 
-PIPELINE_VERSION = "ict-source-pipeline-v1"
+PIPELINE_VERSION = "ict-source-pipeline-v2"
 
 TF_MS = {
     "1m": 60_000,
