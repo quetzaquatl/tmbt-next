@@ -21,6 +21,7 @@ Primary source family:
   https://info.quagmyre.com/xwiki/bin/view/Forex/The-Inner-Circle-Trader/ICT-2016-Premium-Mentorship-Core-Content-Lectures/Outlines/
 """
 
+import re
 from typing import Any
 
 KNOWLEDGE_VERSION = "ict-core-knowledge-v1"
@@ -1124,12 +1125,38 @@ def search(query: str) -> dict[str, Any]:
     q = str(query or "").strip().lower()
     if not q:
         return {"lectures": [], "rules": []}
+
+    lesson_match = re.fullmatch(r"(?:lesson|lektion)?\s*#?\s*(\d{1,3})", q)
+    if lesson_match:
+        n = int(lesson_match.group(1))
+        if 1 <= n <= 115:
+            return {"lectures": [lecture(n)], "rules": [
+                {"rule_id": rid, **RULE_CATALOG[rid]}
+                for rid in lecture(n)["rules"]
+            ]}
+
+    month_match = re.fullmatch(r"(?:month|monat)\s*(\d{1,2})", q)
+    if month_match:
+        month = int(month_match.group(1))
+        selected = [lecture(int(x["global_lesson"])) for x in LECTURES if int(x["month"]) == month]
+        rule_ids = []
+        for item in selected:
+            for rid in item["rules"]:
+                if rid not in rule_ids:
+                    rule_ids.append(rid)
+        return {
+            "lectures": selected,
+            "rules": [{"rule_id": rid, **RULE_CATALOG[rid]} for rid in rule_ids],
+        }
+
     lectures = []
     for row in LECTURES:
         n = int(row["global_lesson"])
+        knowledge = LESSON_KNOWLEDGE.get(n) or {}
         hay = " ".join(
             [
                 str(row["title"]),
+                str(knowledge.get("summary") or ""),
                 *[str(x) for x in LESSON_FOCUS.get(n) or ()],
             ]
         ).lower()
