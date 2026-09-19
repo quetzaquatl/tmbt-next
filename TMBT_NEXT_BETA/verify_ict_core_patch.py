@@ -11,6 +11,8 @@ NY = ZoneInfo("America/New_York")
 # Syntax smoke test for the source-audit integration.
 for name in (
     "ict_core_rules.py",
+    "ict_core_knowledge.py",
+    "ict_core_knowledge_export.py",
     "ict_rule_engine.py",
     "ict_research_snapshot.py",
     "legacy_research_adapter.py",
@@ -22,7 +24,8 @@ for name in (
 ):
     py_compile.compile(str(HERE / name), doraise=True)
 
-from ict_core_rules import profile_provenance, profile_variant_metadata
+from ict_core_rules import profile_provenance, profile_variant_metadata, knowledge_coverage, EXECUTABLE_TO_KNOWLEDGE
+import ict_core_knowledge
 from ict_rule_engine import normalize_closed_bars, fair_value_gaps, confirmed_swings, liquidity_raids, profile_pipeline_contract, snapshot
 from context_factors import DEFAULT_CONFIG, _session_context
 from databento_history_import import OUTRIGHT_RE
@@ -48,6 +51,21 @@ assert OUTRIGHT_RE.fullmatch("YMU26")
 assert len(research_scheduler.DEFAULT_CONFIG["profiles"]) == 15
 assert research_scheduler.DEFAULT_CONFIG["source_audited_matrix_enabled"] is True
 assert research_scheduler.DEFAULT_CONFIG["experimental_timeframe_matrix_enabled"] is False
+
+coverage = knowledge_coverage()
+assert coverage["lecture_count"] == 115
+assert coverage["expected_lecture_count"] == 115
+assert coverage["all_lectures_indexed"] is True
+assert coverage["focus_indexed"] == 115
+assert coverage["rule_catalog_count"] >= 45
+assert coverage["knowledge_linked_executable_rules"] == len(EXECUTABLE_TO_KNOWLEDGE)
+assert len(ict_core_knowledge.LESSON_FOCUS) == 115
+assert ict_core_knowledge.lecture(1)["month"] == 1
+assert ict_core_knowledge.lecture(115)["month"] == 12
+assert "CORE_FAIR_VALUE_GAP" in ict_core_knowledge.RULE_CATALOG
+assert "CORE_CBDR" in ict_core_knowledge.RULE_CATALOG
+assert "CORE_INDEX_SMT_BASKET" in ict_core_knowledge.RULE_CATALOG
+assert ict_core_knowledge.RULE_CATALOG["CORE_ORDER_BLOCK"]["machine_status"] == "VISUAL"
 
 pipe = profile_pipeline_contract("XAU_SWEEP_IFVG_H1")
 assert pipe["context"]["status"] == "SOURCE_AWARE"
@@ -133,3 +151,5 @@ print("  Rule pipeline:", pipe["pipeline_version"], "· setup", pipe["setup"]["s
 print("  Primitive tests: FVG + liquidity raid PASS")
 print("  Canonical matrix: 15 profiles · generated TF variants opt-in")
 print("  YM importer matcher: PASS")
+print("  Core knowledge:", coverage["lecture_count"], "lectures ·", coverage["rule_catalog_count"], "rule groups")
+print("  Visual-dependent rules remain execution-locked")
