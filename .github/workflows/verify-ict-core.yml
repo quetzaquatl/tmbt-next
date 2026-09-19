@@ -32,5 +32,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install verifier dependency
+        run: python -m pip install --disable-pip-version-check pandas
       - name: Compile and verify ICT Core source audit
         run: python verify_ict_core_patch.py
