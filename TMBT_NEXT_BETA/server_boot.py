@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 import os
 import runpy
+import socket
+import threading
+import time
+import webbrowser
 import subprocess
 import sys
 from pathlib import Path
@@ -226,6 +230,67 @@ def print_research_status() -> None:
         print("Research autopilot status failed:", exc)
 
 
+def start_browser_after_server_ready() -> None:
+    """Open the Studio only after the HTTP server is actually reachable.
+
+    The old launcher opened the URL before server_active had bound the port.
+    During Windows logon this could create a failed/ignored browser launch.
+    """
+    if str(os.environ.get("TMBT_AUTO_OPEN_BROWSER", "1")).strip().lower() in {"0", "false", "no", "off"}:
+        print("Browser auto-open: disabled by TMBT_AUTO_OPEN_BROWSER")
+        return
+
+    try:
+        port = int(os.environ.get("TMBT_NEXT_PORT", "8510"))
+    except Exception:
+        port = 8510
+
+    url = f"http://127.0.0.1:{port}/?v=0956"
+
+    def worker() -> None:
+        deadline = time.monotonic() + 75.0
+        ready = False
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                    ready = True
+                    break
+            except OSError:
+                time.sleep(0.5)
+
+        if not ready:
+            print("Browser auto-open: server did not become reachable within 75s")
+            return
+
+        print("Browser auto-open:", url)
+        try:
+            if os.name == "nt" and hasattr(os, "startfile"):
+                os.startfile(url)  # type: ignore[attr-defined]
+                return
+        except Exception:
+            pass
+
+        try:
+            if webbrowser.open(url, new=2):
+                return
+        except Exception:
+            pass
+
+        if os.name == "nt":
+            try:
+                subprocess.Popen(
+                    ["cmd", "/c", "start", "", url],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except Exception as exc:
+                print("Browser auto-open failed:", exc)
+
+    threading.Thread(target=worker, name="tmbt-browser-opener", daemon=True).start()
+    print("Browser auto-open: waiting for server on port", port)
+
+
 def print_collector_status() -> None:
     st = read_json(collector_status_path())
     print("Twelve collector (TMBT migration runtime):")
@@ -258,5 +323,6 @@ print_collector_status()
 print("Guardian status:", guardian_status_path())
 print("Starting focused live desk + 6-instance EBP matrix: NQ/ES x 15m/30m/1H")
 print("QQQ/SPY proxy feeds remain monitoring-only until true futures data is attached.")
+start_browser_after_server_ready()
 
 runpy.run_module("server_active", run_name="__main__")
