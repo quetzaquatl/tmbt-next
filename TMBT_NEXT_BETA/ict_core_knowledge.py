@@ -826,6 +826,20 @@ RULE_CATALOG: dict[str, dict[str, Any]] = {
 # Additional recurring logic families needed for complete lesson coverage. They are
 # kept separate from the small executable primitive registry on purpose.
 RULE_CATALOG.update({
+    "CORE_MARKET_MAKER_CONDITIONING": {
+        "concept": "market_maker_conditioning",
+        "summary": "Repeated price behavior can condition traders to expect the wrong continuation; the lesson uses daily-range narrative and objective selection to counter that bias.",
+        "lessons": [2],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_DIVERGENCE_PHANTOM": {
+        "concept": "divergence_phantom",
+        "summary": "Apparent divergence is not sufficient by itself; trend, institutional reference points and broader context determine whether the non-confirmation is meaningful.",
+        "lessons": [37],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
     "CORE_MARKET_PROTRACTION": {
         "concept": "market_protraction",
         "summary": "Expected delivery is time-sensitive; when price fails to progress within the expected session/time context, the original premise loses quality.",
