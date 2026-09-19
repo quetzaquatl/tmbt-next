@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],outcomeGroups:[],research:[],researchAutopilot:null,researchSync:null,researchScheduler:null,ictCoreCoverage:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,tradeReplay:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
+const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],outcomeGroups:[],research:[],researchAutopilot:null,researchSync:null,researchScheduler:null,ictCoreCoverage:null,ictCoreQuery:"",ictCoreSearchResults:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,tradeReplay:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
 const RESEARCH_ALERT_KEY="tmbt_next_research_alerts_v1";
 const researchAlertSeen=(()=>{try{const x=JSON.parse(localStorage.getItem(RESEARCH_ALERT_KEY)||"[]");return new Set(Array.isArray(x)?x.slice(-500):[])}catch{return new Set()}})();
 let researchAlertsPrimed=false;
@@ -75,6 +75,15 @@ async function pollResearch(){
  }catch(e){}
 }
 
+async function searchIctCoreKnowledge(){
+ try{
+  const q=String($("#ictCoreSearch")?.value||state.ictCoreQuery||"").trim();
+  state.ictCoreQuery=q;
+  if(!q){state.ictCoreSearchResults=null;renderResearch();return}
+  state.ictCoreSearchResults=await api("/api/ict-core-knowledge?q="+encodeURIComponent(q));
+  renderResearch();
+ }catch(e){toast("ICT Core Suche: "+String(e))}
+}
 async function researchAutopilotAction(action){
  try{
   const profile=$("#researchAutopilotProfile")?.value||"NQ_EBP_H1";
