@@ -1140,7 +1140,7 @@ RULE_CATALOG.update({
 })
 
 
-VISUAL_AUDIT_GAPS: dict[str, dict[str, Any]] = {
+SOURCE_AUDIT_STATUS: dict[str, dict[str, Any]] = {
     "CORE_OTE": {"lessons": [4, 5, 88, 115], "status": "TEXT_CERTIFIED_NUMERIC", "gap": "No unresolved numeric source gap; active impulse/dealing-range selection remains contextual."},
     "CORE_FAIR_VALUE_GAP": {"lessons": [36, 41, 95, 115], "status": "TEXT_CERTIFIED_GEOMETRY", "gap": "No unresolved FVG boundary gap; inversion/expiry/mitigation rules remain model-specific."},
     "CORE_ORDER_BLOCK": {"lessons": [27], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Candidate and validation are text-certified; contextual support/resistance and search-window selection remain non-canonical."},
@@ -1162,6 +1162,12 @@ VISUAL_AUDIT_GAPS: dict[str, dict[str, Any]] = {
     "CORE_BOND_OPENING_RANGE": {"lessons": [94], "status": "TEXT_CERTIFIED_BOND_RULE", "gap": "Bond opening-range clock and role are text-certified; remains ZB-specific."},
     "CORE_BOND_SPLIT_SESSION": {"lessons": [95], "status": "TEXT_CERTIFIED_BOND_RULE", "gap": "Bond AM/PM clocks and conditional use are text-certified; remains bond-specific."},
 }
+
+
+# Backward-compatible alias for 0.9.61-era callers. The registry now contains
+# completed source-audit statuses as well as contextual limitations, so the old
+# VISUAL_AUDIT_GAPS name is no longer semantically accurate.
+VISUAL_AUDIT_GAPS = SOURCE_AUDIT_STATUS
 
 
 CONCEPT_INDEX: dict[str, list[str]] = {}
@@ -1265,7 +1271,7 @@ def coverage_report() -> dict[str, Any]:
         and not unmapped_lessons
     )
     visual_locked = sorted(
-        rid for rid, item in VISUAL_AUDIT_GAPS.items()
+        rid for rid, item in SOURCE_AUDIT_STATUS.items()
         if str(item.get("status") or "").upper() == "LOCKED"
     )
     source_rule_audit_complete = not visual_locked
