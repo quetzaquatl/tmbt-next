@@ -28,7 +28,7 @@ LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
 MATRIX_GENERATION = "source-audited-canonical-models-v2"
 LEGACY_MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "source-audited-research-matrix-v3"
+SCHEDULER_GENERATION = "source-audited-research-matrix-v4"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
