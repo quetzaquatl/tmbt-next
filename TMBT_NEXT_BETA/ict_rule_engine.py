@@ -209,9 +209,9 @@ def fair_value_gaps(bars: list[Bar]) -> list[dict[str, Any]]:
                 "fully_traversed_after_creation": fully_traversed,
                 "first_full_traversal_ms": first_full_ms,
                 "rule_id": "ICT_CORE_FVG_3_CANDLE",
-                "evidence_class": "C",
-                "geometry_status": "RESEARCH_CANDIDATE_VISUAL_LOCKED",
-                "execution_usable": False,
+                "evidence_class": "B",
+                "geometry_status": "SOURCE_CERTIFIED",
+                "primitive_usable": True,
                 "validity_claim": "NONE",
             }
         )
@@ -295,6 +295,16 @@ def _latest_dealing_range(
     else:
         location = "EQUILIBRIUM"
 
+    rng = high - low
+    if direction == "BULLISH":
+        p62 = high - 0.62 * rng
+        p705 = high - 0.705 * rng
+        p79 = high - 0.79 * rng
+    else:
+        p62 = low + 0.62 * rng
+        p705 = low + 0.705 * rng
+        p79 = low + 0.79 * rng
+
     return {
         "available": True,
         "low": low,
@@ -304,15 +314,20 @@ def _latest_dealing_range(
         "location": location,
         "impulse_direction": direction,
         "ote_zone": {
-            "available": False,
-            "status": "VISUAL_SOURCE_AUDIT_LOCKED",
-            "reason": "Exact OTE Fib labels/zone boundaries are not exposed as deterministic Core geometry until visual certification is complete.",
+            "available": True,
+            "p62": p62,
+            "p70_5": p705,
+            "p79": p79,
+            "low": min(p62, p79),
+            "high": max(p62, p79),
+            "reference": p705,
+            "geometry_status": "SOURCE_CERTIFIED",
         },
         "source_rules": ["ICT_CORE_OTE_ZONE"],
         "range_selection_evidence_class": "D",
         "equilibrium_evidence_class": "A",
-        "ote_geometry_evidence_class": "C",
-        "note": "50% equilibrium is source-backed; latest-opposite-swing range selection is TMBT and exact OTE geometry remains visually locked.",
+        "ote_geometry_evidence_class": "A",
+        "note": "OTE percentages are source-certified; latest-opposite-swing active range selection remains a TMBT convention.",
     }
 
 
@@ -438,9 +453,9 @@ def snapshot(
         "audit": {
             "closed_candles_only": True,
             "pivot_geometry_evidence_class": "D",
-            "fvg_geometry_evidence_class": "C",
-            "fvg_geometry_locked": True,
-            "ote_geometry_locked": True,
+            "fvg_geometry_evidence_class": "B",
+            "fvg_geometry_locked": False,
+            "ote_geometry_locked": False,
             "liquidity_reference_evidence_class": "A",
             "profitability_claim": False,
         },
