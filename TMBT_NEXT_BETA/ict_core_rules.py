@@ -271,13 +271,14 @@ def profile_provenance(profile_id: str) -> dict[str, Any]:
                 "ICT_CORE_INDEX_SMT",
             ]
         return _base_profile(
-            source_family="ICT Core-derived top-down framework + TMBT",
-            source_status="DERIVED_NOT_LITERAL_MODEL",
+            source_family="TTRADES_PUBLIC + ICT_CORE_CONTEXT + TMBT",
+            source_status="MIXED_EXTERNAL_PUBLIC_MODEL",
             evidence_class="B",
             core_rules=rules,
             non_core_assumptions=["TTFM_STATE_MACHINE"],
             notes=[
-                "Top-down hierarchy is strongly Core-compatible; exact three-timeframe gates and thresholds are TMBT implementation choices.",
+                "The named TTFM playbooks come from public TTrades education, not from the ICT 2016/17 Core Content.",
+                "ICT Core context such as index-session/SMT may be layered around the model, but exact three-timeframe gates and thresholds remain TMBT implementation choices.",
             ],
         )
 
