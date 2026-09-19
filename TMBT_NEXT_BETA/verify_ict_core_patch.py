@@ -24,9 +24,9 @@ for name in (
 ):
     py_compile.compile(str(HERE / name), doraise=True)
 
-from ict_core_rules import profile_provenance, profile_variant_metadata, knowledge_coverage, EXECUTABLE_TO_KNOWLEDGE, core_rule_gate
+from ict_core_rules import profile_provenance, profile_variant_metadata, knowledge_coverage, EXECUTABLE_TO_KNOWLEDGE, CORE_RULES, core_rule_gate
 import ict_core_knowledge
-from ict_rule_engine import normalize_closed_bars, fair_value_gaps, confirmed_swings, liquidity_raids, profile_pipeline_contract, snapshot
+from ict_rule_engine import PIPELINE_VERSION, normalize_closed_bars, fair_value_gaps, confirmed_swings, liquidity_raids, profile_pipeline_contract, snapshot
 from context_factors import DEFAULT_CONFIG, _session_context
 from databento_history_import import OUTRIGHT_RE
 import research_scheduler
@@ -53,6 +53,8 @@ assert research_scheduler.DEFAULT_CONFIG["source_audited_matrix_enabled"] is Tru
 assert research_scheduler.DEFAULT_CONFIG["experimental_timeframe_matrix_enabled"] is False
 
 coverage = knowledge_coverage()
+assert coverage["knowledge_version"] == "ict-core-knowledge-v2"
+assert PIPELINE_VERSION == "ict-source-pipeline-v2"
 assert coverage["lecture_count"] == 115
 assert coverage["expected_lecture_count"] == 115
 assert coverage["all_lectures_indexed"] is True
@@ -67,7 +69,7 @@ assert coverage["completion"]["source_rule_audit"] == "COMPLETE"
 assert coverage["completion"]["frame_by_frame_visual_audit"] == "NOT_CLAIMED"
 assert coverage["completion"]["full_rule_audit"] == "COMPLETE"
 assert coverage["focus_indexed"] == 115
-assert coverage["rule_catalog_count"] >= 80
+assert coverage["rule_catalog_count"] == 88
 assert coverage["rule_mapped_lecture_count"] == 115
 assert coverage["unmapped_lessons"] == []
 assert coverage["knowledge_linked_executable_rules"] == len(EXECUTABLE_TO_KNOWLEDGE)
@@ -90,6 +92,12 @@ assert core_rule_gate("ICT_CORE_OTE_ZONE")["execution_allowed"] is True
 assert core_rule_gate("ICT_CORE_FVG_3_CANDLE")["execution_allowed"] is True
 assert core_rule_gate("ICT_CORE_INDEX_OPENING_RANGE")["execution_allowed"] is True
 assert core_rule_gate("ICT_CORE_ORDER_BLOCK")["execution_allowed"] is False
+assert CORE_RULES["ICT_CORE_OTE_ZONE"]["machine_interpretation"]["ote_zone_min_pct"] == 62.0
+assert CORE_RULES["ICT_CORE_OTE_ZONE"]["machine_interpretation"]["ote_reference_pct"] == 70.5
+assert CORE_RULES["ICT_CORE_OTE_ZONE"]["machine_interpretation"]["ote_zone_max_pct"] == 79.0
+assert ict_core_knowledge.VISUAL_AUDIT_GAPS["CORE_OTE"]["status"] == "TEXT_CERTIFIED_NUMERIC"
+assert ict_core_knowledge.VISUAL_AUDIT_GAPS["CORE_FAIR_VALUE_GAP"]["status"] == "TEXT_CERTIFIED_GEOMETRY"
+assert all(str(x.get("status") or "").upper() != "LOCKED" for x in ict_core_knowledge.VISUAL_AUDIT_GAPS.values())
 
 pipe = profile_pipeline_contract("XAU_SWEEP_IFVG_H1")
 assert pipe["context"]["status"] == "SOURCE_AWARE"
