@@ -60,6 +60,9 @@ assert coverage["focus_indexed"] == 115
 assert coverage["rule_catalog_count"] >= 45
 assert coverage["knowledge_linked_executable_rules"] == len(EXECUTABLE_TO_KNOWLEDGE)
 assert len(ict_core_knowledge.LESSON_FOCUS) == 115
+assert len(ict_core_knowledge.LESSON_KNOWLEDGE) == 115
+assert coverage["lesson_knowledge_count"] == 115
+assert coverage["lesson_knowledge_complete"] is True
 assert ict_core_knowledge.lecture(1)["month"] == 1
 assert ict_core_knowledge.lecture(115)["month"] == 12
 assert "CORE_FAIR_VALUE_GAP" in ict_core_knowledge.RULE_CATALOG
@@ -151,5 +154,5 @@ print("  Rule pipeline:", pipe["pipeline_version"], "· setup", pipe["setup"]["s
 print("  Primitive tests: FVG + liquidity raid PASS")
 print("  Canonical matrix: 15 profiles · generated TF variants opt-in")
 print("  YM importer matcher: PASS")
-print("  Core knowledge:", coverage["lecture_count"], "lectures ·", coverage["rule_catalog_count"], "rule groups")
+print("  Core knowledge:", coverage["lecture_count"], "lectures ·", coverage["lesson_knowledge_count"], "lesson notes ·", coverage["rule_catalog_count"], "rule groups")
 print("  Visual-dependent rules remain execution-locked")
