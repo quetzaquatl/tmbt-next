@@ -57,7 +57,9 @@ assert coverage["lecture_count"] == 115
 assert coverage["expected_lecture_count"] == 115
 assert coverage["all_lectures_indexed"] is True
 assert coverage["focus_indexed"] == 115
-assert coverage["rule_catalog_count"] >= 45
+assert coverage["rule_catalog_count"] >= 80
+assert coverage["rule_mapped_lecture_count"] == 115
+assert coverage["unmapped_lessons"] == []
 assert coverage["knowledge_linked_executable_rules"] == len(EXECUTABLE_TO_KNOWLEDGE)
 assert len(ict_core_knowledge.LESSON_FOCUS) == 115
 assert len(ict_core_knowledge.LESSON_KNOWLEDGE) == 115
@@ -155,4 +157,5 @@ print("  Primitive tests: FVG + liquidity raid PASS")
 print("  Canonical matrix: 15 profiles · generated TF variants opt-in")
 print("  YM importer matcher: PASS")
 print("  Core knowledge:", coverage["lecture_count"], "lectures ·", coverage["lesson_knowledge_count"], "lesson notes ·", coverage["rule_catalog_count"], "rule groups")
+print("  Rule mapping:", coverage["rule_mapped_lecture_count"], "/115 lectures · unmapped", coverage["unmapped_lessons"])
 print("  Visual-dependent rules remain execution-locked")
