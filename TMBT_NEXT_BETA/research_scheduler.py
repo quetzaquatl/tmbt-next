@@ -26,8 +26,9 @@ LOCK_FILE = ROOT / "scheduler.lock"
 REPORT_ROOT = WORKSPACE / "research_reports"
 LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
-MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "full-research-matrix-v2-preset-heal"
+MATRIX_GENERATION = "source-audited-canonical-models-v2"
+LEGACY_MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
+SCHEDULER_GENERATION = "source-audited-research-matrix-v3"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -48,7 +49,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "run_on_start": True,
     "auto_live_promotion": False,
     "ttfm_public_core_enabled": True,
-    "full_model_matrix_enabled": True,
+    # Canonical/source-audited profiles run by default. Generated cross-timeframe
+    # clones remain available, but are explicitly opt-in research variants.
+    "source_audited_matrix_enabled": True,
+    "experimental_timeframe_matrix_enabled": False,
+    "full_model_matrix_enabled": False,
     "matrix_generation": MATRIX_GENERATION,
 }
 
@@ -95,7 +100,19 @@ def _parse_dt(value: Any) -> datetime | None:
 
 def load_config() -> dict[str, Any]:
     cfg = dict(DEFAULT_CONFIG)
-    cfg.update(_read_json(CONFIG))
+    persisted = _read_json(CONFIG)
+    cfg.update(persisted)
+
+    # Migrate the old automatically-generated 49-profile matrix to the
+    # source-audited canonical matrix. The broad cross-timeframe clones are not
+    # deleted; they simply become opt-in experimental variants.
+    migrated_old_matrix = str(persisted.get("matrix_generation") or "") == LEGACY_MATRIX_GENERATION
+    if migrated_old_matrix:
+        cfg["source_audited_matrix_enabled"] = True
+        cfg["experimental_timeframe_matrix_enabled"] = False
+        cfg["full_model_matrix_enabled"] = False
+        cfg["matrix_generation"] = MATRIX_GENERATION
+
     cfg["profiles"] = [str(x) for x in list(cfg.get("profiles") or [])]
     # One-time expansion of the existing H1 EBP schedule to the explicitly
     # requested M15/M30/H1 research matrix. Preserve any extra custom profiles.
@@ -122,13 +139,49 @@ def load_config() -> dict[str, Any]:
             if p not in cfg["profiles"]:
                 cfg["profiles"].append(p)
 
-    if bool(cfg.get("full_model_matrix_enabled", True)):
-        # Replace the two old single-TF aliases with the explicit matrix so the
-        # same M15/M5 run is not executed twice under different names.
+    if bool(cfg.get("source_audited_matrix_enabled", True)):
+        # Canonical model definitions only. These are the profiles that map to
+        # an original formalized model or an explicitly documented public model.
+        # Cross-timeframe clones are intentionally excluded from the default
+        # research queue because "same structure" does not justify identical
+        # bar-count parameters on every timeframe.
         cfg["profiles"] = [
             p for p in cfg["profiles"]
             if p not in {"XAU_OTE_BOS", "XAU_SWEEP_IFVG"}
         ]
+        canonical = [
+            "NQ_EBP_H1", "ES_EBP_H1",
+            "XAU_OTE_BOS_M15",
+            "XAU_SWEEP_IFVG_M5",
+            "NQ_SILVER_BULLET_M1", "ES_SILVER_BULLET_M1",
+            "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
+            "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
+            "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
+        ]
+        # Remove generated variants from a legacy persisted profile list.
+        generated_prefixes = (
+            "NQ_EBP_M15", "NQ_EBP_M30", "ES_EBP_M15", "ES_EBP_M30",
+            "XAU_OTE_BOS_M5", "XAU_OTE_BOS_M30", "XAU_OTE_BOS_H1", "XAU_OTE_BOS_H4",
+            "GC_OTE_BOS_",
+            "XAU_SWEEP_IFVG_M1", "XAU_SWEEP_IFVG_M3", "XAU_SWEEP_IFVG_M15",
+            "XAU_SWEEP_IFVG_M30", "XAU_SWEEP_IFVG_H1", "GC_SWEEP_IFVG_",
+            "NQ_SILVER_BULLET_M3", "NQ_SILVER_BULLET_M5", "NQ_SILVER_BULLET_M15",
+            "NQ_SILVER_BULLET_M30", "NQ_SILVER_BULLET_H1",
+            "ES_SILVER_BULLET_M3", "ES_SILVER_BULLET_M5", "ES_SILVER_BULLET_M15",
+            "ES_SILVER_BULLET_M30", "ES_SILVER_BULLET_H1",
+        )
+        cfg["profiles"] = [
+            p for p in cfg["profiles"]
+            if not any(p == prefix or p.startswith(prefix) for prefix in generated_prefixes)
+        ]
+        for p in canonical:
+            if p not in cfg["profiles"]:
+                cfg["profiles"].append(p)
+        cfg["matrix_generation"] = MATRIX_GENERATION
+
+    if bool(cfg.get("experimental_timeframe_matrix_enabled", False)) or bool(cfg.get("full_model_matrix_enabled", False)):
+        # Explicit opt-in discovery matrix. These are generated research clones,
+        # not canonical strategy definitions.
         matrix = []
         matrix += [
             "NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1",
@@ -147,12 +200,12 @@ def load_config() -> dict[str, Any]:
         for p in matrix:
             if p not in cfg["profiles"]:
                 cfg["profiles"].append(p)
-        cfg["matrix_generation"] = MATRIX_GENERATION
+        cfg["matrix_generation"] = MATRIX_GENERATION + "+experimental-tf-v1"
     cfg["poll_seconds"] = max(30, int(cfg.get("poll_seconds") or 60))
     cfg["cycle_hours_failed"] = max(1, int(cfg.get("cycle_hours_failed") or 24))
     cfg["cycle_hours_passed"] = max(24, int(cfg.get("cycle_hours_passed") or 168))
     cfg["max_failed_cycles"] = max(1, min(10, int(cfg.get("max_failed_cycles") or 3)))
-    if not CONFIG.exists():
+    if not CONFIG.exists() or migrated_old_matrix:
         _write_json(CONFIG, cfg)
     return cfg
 
