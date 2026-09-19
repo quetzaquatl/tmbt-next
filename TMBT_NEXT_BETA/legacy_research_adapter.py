@@ -716,8 +716,8 @@ def activate() -> dict[str, Any]:
                 "optimizers": [dict(x) for x in ifvg_optimizers],
             }
 
-    # TTFM public-core research. We only optimize the explicit TMBT
-    # implementation conventions, not undocumented/private indicator rules.
+    # TTFM public TTrades research. This is NOT ICT Core Content. We only
+    # optimize explicit TMBT implementation conventions, not undocumented/private indicator rules.
     ttfm_optimizers = [
         {
             "name": "Protected-swing pivot confirmation",
