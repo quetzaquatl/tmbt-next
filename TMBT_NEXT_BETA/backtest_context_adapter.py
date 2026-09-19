@@ -136,6 +136,12 @@ def flatten_context(ctx: dict[str, Any], market: str) -> dict[str, Any]:
         "ctx_midnight_position": levels.get("midnight_position"),
         "ctx_midnight_bull_reclaim": levels.get("midnight_bull_reclaim"),
         "ctx_midnight_bear_reclaim": levels.get("midnight_bear_reclaim"),
+        "ctx_index_session_phase": levels.get("index_session_phase"),
+        "ctx_index_or_high": levels.get("index_or_high"),
+        "ctx_index_or_low": levels.get("index_or_low"),
+        "ctx_index_or_complete": levels.get("index_or_complete"),
+        "ctx_index_am_active": levels.get("index_am_active"),
+        "ctx_index_pm_active": levels.get("index_pm_active"),
     }
 
 
