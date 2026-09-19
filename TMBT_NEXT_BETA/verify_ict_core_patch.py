@@ -24,7 +24,7 @@ for name in (
 ):
     py_compile.compile(str(HERE / name), doraise=True)
 
-from ict_core_rules import profile_provenance, profile_variant_metadata, knowledge_coverage, EXECUTABLE_TO_KNOWLEDGE
+from ict_core_rules import profile_provenance, profile_variant_metadata, knowledge_coverage, EXECUTABLE_TO_KNOWLEDGE, core_rule_gate
 import ict_core_knowledge
 from ict_rule_engine import normalize_closed_bars, fair_value_gaps, confirmed_swings, liquidity_raids, profile_pipeline_contract, snapshot
 from context_factors import DEFAULT_CONFIG, _session_context
@@ -58,6 +58,11 @@ assert coverage["expected_lecture_count"] == 115
 assert coverage["all_lectures_indexed"] is True
 assert coverage["structured_knowledge_complete"] is True
 assert coverage["completion"]["structured_knowledge_base"] == "COMPLETE"
+assert coverage["visual_certification_complete"] is False
+assert coverage["fully_source_certified"] is False
+assert coverage["visual_locked_rule_count"] >= 20
+assert coverage["completion"]["visual_geometry_audit"] == "IN_PROGRESS_LOCKED"
+assert coverage["completion"]["full_source_certification"] == "IN_PROGRESS"
 assert coverage["focus_indexed"] == 115
 assert coverage["rule_catalog_count"] >= 80
 assert coverage["rule_mapped_lecture_count"] == 115
@@ -74,8 +79,16 @@ assert "CORE_CBDR" in ict_core_knowledge.RULE_CATALOG
 assert "CORE_INDEX_SMT_BASKET" in ict_core_knowledge.RULE_CATALOG
 assert ict_core_knowledge.RULE_CATALOG["CORE_ORDER_BLOCK"]["machine_status"] == "VISUAL"
 
+assert ict_core_knowledge.RULE_CATALOG["CORE_OTE"]["evidence_class"] == "C"
+assert ict_core_knowledge.RULE_CATALOG["CORE_FAIR_VALUE_GAP"]["evidence_class"] == "C"
+assert core_rule_gate("ICT_CORE_OTE_ZONE")["execution_allowed"] is False
+assert core_rule_gate("ICT_CORE_FVG_3_CANDLE")["execution_allowed"] is False
+assert core_rule_gate("ICT_CORE_INDEX_OPENING_RANGE")["execution_allowed"] is True
+
 pipe = profile_pipeline_contract("XAU_SWEEP_IFVG_H1")
 assert pipe["context"]["status"] == "SOURCE_AWARE"
+assert "ICT_CORE_FVG_3_CANDLE" in pipe["context"]["locked_core_rules"]
+assert "ICT_CORE_FVG_3_CANDLE" not in pipe["context"]["production_safe_core_rules"]
 assert pipe["setup"]["status"] == "MODEL_SPECIFIC"
 assert pipe["setup"]["auto_infer_from_core_events"] is False
 assert "IFVG_FIXED_BAR_EXPIRY" in pipe["setup"]["non_core_assumptions"]
@@ -94,6 +107,9 @@ assert gaps and gaps[-1]["side"] == "BULLISH"
 assert abs(gaps[-1]["low"] - 101.0) < 1e-9
 assert abs(gaps[-1]["high"] - 101.5) < 1e-9
 assert gaps[-1]["validity_claim"] == "NONE"
+assert gaps[-1]["evidence_class"] == "C"
+assert gaps[-1]["geometry_status"] == "RESEARCH_CANDIDATE_VISUAL_LOCKED"
+assert gaps[-1]["execution_usable"] is False
 
 raid_rows = [
     {"t": base_ms + 0 * width, "close_t": base_ms + 1 * width, "o": 100.0, "h": 101.0, "l": 99.0, "c": 100.0},
@@ -110,6 +126,8 @@ snap = snapshot(fvg_rows, market="NQ", timeframe="5m", as_of_ms=base_ms + 3 * wi
 assert snap["layers"]["setup"]["status"] == "LOCKED"
 assert snap["layers"]["execution"]["status"] == "LOCKED"
 assert snap["layers"]["risk"]["status"] == "LOCKED"
+assert snap["audit"]["fvg_geometry_locked"] is True
+assert snap["audit"]["ote_geometry_locked"] is True
 
 # Point-in-time test for the Month-10 index session features.
 day = datetime(2026, 9, 18, 0, 0, tzinfo=NY)
