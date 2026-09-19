@@ -30,8 +30,8 @@ def _norm_tf(tf: str) -> str:
 
 def _norm_market(market: str) -> str:
     z = str(market or "").strip().upper()
-    if z not in {"NQ", "ES", "GC"}:
-        raise ValueError(f"Historical Databento store supports NQ/ES/GC, got {market!r}")
+    if z not in {"NQ", "ES", "YM", "GC"}:
+        raise ValueError(f"Historical Databento store supports NQ/ES/YM/GC, got {market!r}")
     return z
 
 
