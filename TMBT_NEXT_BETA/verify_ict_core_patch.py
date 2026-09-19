@@ -56,6 +56,8 @@ coverage = knowledge_coverage()
 assert coverage["lecture_count"] == 115
 assert coverage["expected_lecture_count"] == 115
 assert coverage["all_lectures_indexed"] is True
+assert coverage["structured_knowledge_complete"] is True
+assert coverage["completion"]["structured_knowledge_base"] == "COMPLETE"
 assert coverage["focus_indexed"] == 115
 assert coverage["rule_catalog_count"] >= 80
 assert coverage["rule_mapped_lecture_count"] == 115
