@@ -43,7 +43,7 @@ def ready_models():
 # function as the EBP evaluator. This prevents model/chart feed mismatches.
 core.query_bars = ready_query
 core.normalize_models = ready_models
-core.APP_VERSION = "0.9.13-beta-ebp-futures-ready"
+core.APP_VERSION = "0.9.58-beta-ict-core-audit"
 
 
 def _feed_one(market, tf="5m"):
