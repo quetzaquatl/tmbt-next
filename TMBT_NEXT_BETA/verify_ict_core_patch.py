@@ -58,11 +58,14 @@ assert coverage["expected_lecture_count"] == 115
 assert coverage["all_lectures_indexed"] is True
 assert coverage["structured_knowledge_complete"] is True
 assert coverage["completion"]["structured_knowledge_base"] == "COMPLETE"
-assert coverage["visual_certification_complete"] is False
-assert coverage["fully_source_certified"] is False
-assert coverage["visual_locked_rule_count"] >= 20
-assert coverage["completion"]["visual_geometry_audit"] == "IN_PROGRESS_LOCKED"
-assert coverage["completion"]["full_source_certification"] == "IN_PROGRESS"
+assert coverage["source_rule_audit_complete"] is True
+assert coverage["fully_rule_audited"] is True
+assert coverage["frame_by_frame_visual_audit_complete"] is False
+assert coverage["visual_locked_rule_count"] == 0
+assert coverage["visual_locked_rules"] == []
+assert coverage["completion"]["source_rule_audit"] == "COMPLETE"
+assert coverage["completion"]["frame_by_frame_visual_audit"] == "NOT_CLAIMED"
+assert coverage["completion"]["full_rule_audit"] == "COMPLETE"
 assert coverage["focus_indexed"] == 115
 assert coverage["rule_catalog_count"] >= 80
 assert coverage["rule_mapped_lecture_count"] == 115
@@ -77,18 +80,21 @@ assert ict_core_knowledge.lecture(115)["month"] == 12
 assert "CORE_FAIR_VALUE_GAP" in ict_core_knowledge.RULE_CATALOG
 assert "CORE_CBDR" in ict_core_knowledge.RULE_CATALOG
 assert "CORE_INDEX_SMT_BASKET" in ict_core_knowledge.RULE_CATALOG
-assert ict_core_knowledge.RULE_CATALOG["CORE_ORDER_BLOCK"]["machine_status"] == "VISUAL"
+assert ict_core_knowledge.RULE_CATALOG["CORE_ORDER_BLOCK"]["machine_status"] == "PARTIAL"
 
-assert ict_core_knowledge.RULE_CATALOG["CORE_OTE"]["evidence_class"] == "C"
-assert ict_core_knowledge.RULE_CATALOG["CORE_FAIR_VALUE_GAP"]["evidence_class"] == "C"
-assert core_rule_gate("ICT_CORE_OTE_ZONE")["execution_allowed"] is False
-assert core_rule_gate("ICT_CORE_FVG_3_CANDLE")["execution_allowed"] is False
+assert ict_core_knowledge.RULE_CATALOG["CORE_OTE"]["evidence_class"] == "A"
+assert ict_core_knowledge.RULE_CATALOG["CORE_OTE"]["machine_status"] == "READY"
+assert ict_core_knowledge.RULE_CATALOG["CORE_FAIR_VALUE_GAP"]["evidence_class"] == "A"
+assert ict_core_knowledge.RULE_CATALOG["CORE_FAIR_VALUE_GAP"]["machine_status"] == "READY"
+assert core_rule_gate("ICT_CORE_OTE_ZONE")["execution_allowed"] is True
+assert core_rule_gate("ICT_CORE_FVG_3_CANDLE")["execution_allowed"] is True
 assert core_rule_gate("ICT_CORE_INDEX_OPENING_RANGE")["execution_allowed"] is True
+assert core_rule_gate("ICT_CORE_ORDER_BLOCK")["execution_allowed"] is False
 
 pipe = profile_pipeline_contract("XAU_SWEEP_IFVG_H1")
 assert pipe["context"]["status"] == "SOURCE_AWARE"
-assert "ICT_CORE_FVG_3_CANDLE" in pipe["context"]["locked_core_rules"]
-assert "ICT_CORE_FVG_3_CANDLE" not in pipe["context"]["production_safe_core_rules"]
+assert "ICT_CORE_FVG_3_CANDLE" not in pipe["context"]["locked_core_rules"]
+assert "ICT_CORE_FVG_3_CANDLE" in pipe["context"]["production_safe_core_rules"]
 assert pipe["setup"]["status"] == "MODEL_SPECIFIC"
 assert pipe["setup"]["auto_infer_from_core_events"] is False
 assert "IFVG_FIXED_BAR_EXPIRY" in pipe["setup"]["non_core_assumptions"]
@@ -107,9 +113,9 @@ assert gaps and gaps[-1]["side"] == "BULLISH"
 assert abs(gaps[-1]["low"] - 101.0) < 1e-9
 assert abs(gaps[-1]["high"] - 101.5) < 1e-9
 assert gaps[-1]["validity_claim"] == "NONE"
-assert gaps[-1]["evidence_class"] == "C"
-assert gaps[-1]["geometry_status"] == "RESEARCH_CANDIDATE_VISUAL_LOCKED"
-assert gaps[-1]["execution_usable"] is False
+assert gaps[-1]["evidence_class"] == "B"
+assert gaps[-1]["geometry_status"] == "SOURCE_CERTIFIED"
+assert gaps[-1]["primitive_usable"] is True
 
 raid_rows = [
     {"t": base_ms + 0 * width, "close_t": base_ms + 1 * width, "o": 100.0, "h": 101.0, "l": 99.0, "c": 100.0},
@@ -126,8 +132,8 @@ snap = snapshot(fvg_rows, market="NQ", timeframe="5m", as_of_ms=base_ms + 3 * wi
 assert snap["layers"]["setup"]["status"] == "LOCKED"
 assert snap["layers"]["execution"]["status"] == "LOCKED"
 assert snap["layers"]["risk"]["status"] == "LOCKED"
-assert snap["audit"]["fvg_geometry_locked"] is True
-assert snap["audit"]["ote_geometry_locked"] is True
+assert snap["audit"]["fvg_geometry_locked"] is False
+assert snap["audit"]["ote_geometry_locked"] is False
 
 # Point-in-time test for the Month-10 index session features.
 day = datetime(2026, 9, 18, 0, 0, tzinfo=NY)
@@ -178,4 +184,5 @@ print("  Canonical matrix: 15 profiles · generated TF variants opt-in")
 print("  YM importer matcher: PASS")
 print("  Core knowledge:", coverage["lecture_count"], "lectures ·", coverage["lesson_knowledge_count"], "lesson notes ·", coverage["rule_catalog_count"], "rule groups")
 print("  Rule mapping:", coverage["rule_mapped_lecture_count"], "/115 lectures · unmapped", coverage["unmapped_lessons"])
-print("  Visual-dependent rules remain execution-locked")
+print("  Source-rule audit: COMPLETE · unresolved locked rules:", coverage["visual_locked_rule_count"])
+print("  Frame-by-frame 53h video audit: NOT CLAIMED · contextual/reference rules remain non-executable")
