@@ -492,10 +492,11 @@ RULE_CATALOG: dict[str, dict[str, Any]] = {
     },
     "CORE_OTE": {
         "concept": "OTE",
-        "summary": "Optimal Trade Entry is a deep retracement area inside a relevant price swing, with 70.5% used as a reference inside the 62%-79% zone.",
+        "summary": "Optimal Trade Entry is taught as a deep retracement concept inside a relevant price swing. Exact fib labels/zone boundaries are kept visually locked until the original chart/Fib presentation is source-faithfully certified.",
         "lessons": [4, 5, 88, 115],
-        "evidence_class": "A",
-        "machine_status": "READY",
+        "evidence_class": "C",
+        "machine_status": "PARTIAL",
+        "note": "50% equilibrium is separately source-backed. Do not auto-execute 62/70.5/79 as canonical Core constants while the visual audit remains open.",
     },
     "CORE_LIQUIDITY_OLD_HIGHS_LOWS": {
         "concept": "liquidity",
@@ -592,11 +593,11 @@ RULE_CATALOG: dict[str, dict[str, Any]] = {
     },
     "CORE_FAIR_VALUE_GAP": {
         "concept": "FVG",
-        "summary": "A Fair Value Gap is a three-candle one-sided delivery pocket between candle one and candle three around the displacement candle.",
+        "summary": "A Fair Value Gap is taught as a multi-candle one-sided delivery imbalance around displacement. The three-candle concept is source-supported, but exact wick/body boundary geometry remains visually locked until certified against the original chart presentation.",
         "lessons": [36, 41, 95, 115],
-        "evidence_class": "B",
-        "machine_status": "READY",
-        "note": "Touch/traversal can be measured; model-specific mitigation/invalidation is separate.",
+        "evidence_class": "C",
+        "machine_status": "PARTIAL",
+        "note": "TMBT may measure a three-candle wick-gap candidate for research, but must not label that exact geometry as fully source-certified Core while the visual audit is open.",
     },
     "CORE_EQUAL_HIGHS_LOWS_LIQUIDITY": {
         "concept": "equal_highs_lows",
@@ -1103,6 +1104,31 @@ RULE_CATALOG.update({
     },
 })
 
+
+VISUAL_AUDIT_GAPS: dict[str, dict[str, Any]] = {
+    "CORE_OTE": {"lessons": [4, 5, 88, 115], "status": "LOCKED", "gap": "Exact OTE Fib labels/zone boundaries require visual certification."},
+    "CORE_FAIR_VALUE_GAP": {"lessons": [36, 41, 95, 115], "status": "LOCKED", "gap": "Exact wick/body boundary geometry requires visual certification."},
+    "CORE_ORDER_BLOCK": {"lessons": [27], "status": "LOCKED", "gap": "Exact candle candidate/validation geometry is chart-dependent."},
+    "CORE_MITIGATION_BLOCK": {"lessons": [28, 68], "status": "LOCKED", "gap": "Exact swing/candle relationship is chart-dependent."},
+    "CORE_BREAKER_BLOCK": {"lessons": [29, 43, 52, 88, 115], "status": "LOCKED", "gap": "Exact failed-block and structural-transition geometry is chart-dependent."},
+    "CORE_REJECTION_BLOCK": {"lessons": [30, 73], "status": "LOCKED", "gap": "Exact wick/reference geometry is chart-dependent."},
+    "CORE_RECLAIMED_ORDER_BLOCK": {"lessons": [31], "status": "LOCKED", "gap": "Exact reclaim/re-use geometry is chart-dependent."},
+    "CORE_PROPULSION_BLOCK": {"lessons": [32], "status": "LOCKED", "gap": "Exact qualifying candle and follow-through geometry is chart-dependent."},
+    "CORE_OPEN_FLOAT": {"lessons": [40, 42], "status": "LOCKED", "gap": "Reference selection and chart hierarchy remain discretionary/visual."},
+    "CORE_INSTITUTIONAL_SWING_POINTS": {"lessons": [40, 42, 43], "status": "LOCKED", "gap": "Swing/failure-swing classification needs visual certification."},
+    "CORE_PD_ARRAY_MATRIX": {"lessons": [52, 53, 59, 65, 68, 73, 79, 88, 101, 112], "status": "LOCKED", "gap": "Full array ordering/active-array selection requires visual/context audit."},
+    "CORE_WEEKLY_PROFILE_CONTEXT": {"lessons": [65, 66, 67, 71, 72, 73, 88], "status": "LOCKED", "gap": "Conditional weekly profiles must not become deterministic weekday rules."},
+    "CORE_WEEKLY_MANIPULATION_TEMPLATES": {"lessons": [66, 67, 71], "status": "LOCKED", "gap": "Stage/profile geometry is contextual and chart-dependent."},
+    "CORE_ONE_SHOT_ONE_KILL": {"lessons": [72], "status": "LOCKED", "gap": "Full setup orchestration remains contextual/visual."},
+    "CORE_INTRADAY_PROFILE": {"lessons": [77, 84, 85, 95, 96, 97, 99, 100, 101], "status": "LOCKED", "gap": "Profile classification depends on pre-session structure and context."},
+    "CORE_ZERO_GMT_PIVOT_CONTEXT": {"lessons": [82], "status": "LOCKED", "gap": "Exact pivot/range construction requires source-visual verification."},
+    "CORE_ASIAN_SCALP_MODEL": {"lessons": [83], "status": "LOCKED", "gap": "FX-specific execution geometry is not portable to futures and remains visual/model-specific."},
+    "CORE_BREAD_AND_BUTTER_DAYTRADE": {"lessons": [86, 87], "status": "LOCKED", "gap": "Full Judas/repricing/time-and-price geometry remains chart-dependent."},
+    "CORE_BOND_OPENING_RANGE": {"lessons": [94], "status": "LOCKED", "gap": "Bond-specific range/volume geometry requires source-visual verification."},
+    "CORE_BOND_SPLIT_SESSION": {"lessons": [95], "status": "LOCKED", "gap": "Bond AM/PM reversal geometry remains model-specific/visual."},
+}
+
+
 CONCEPT_INDEX: dict[str, list[str]] = {}
 for rule_id, rule in RULE_CATALOG.items():
     CONCEPT_INDEX.setdefault(str(rule["concept"]), []).append(rule_id)
@@ -1203,9 +1229,18 @@ def coverage_report() -> dict[str, Any]:
         and len(LESSON_KNOWLEDGE) == 115
         and not unmapped_lessons
     )
+    visual_locked = sorted(
+        rid for rid, item in VISUAL_AUDIT_GAPS.items()
+        if str(item.get("status") or "").upper() == "LOCKED"
+    )
+    visual_certification_complete = not visual_locked
     return {
         "knowledge_version": KNOWLEDGE_VERSION,
         "structured_knowledge_complete": structured_complete,
+        "visual_certification_complete": visual_certification_complete,
+        "fully_source_certified": bool(structured_complete and visual_certification_complete),
+        "visual_locked_rule_count": len(visual_locked),
+        "visual_locked_rules": visual_locked,
         "lecture_count": len(LECTURES),
         "expected_lecture_count": 115,
         "months": 12,
@@ -1228,7 +1263,8 @@ def coverage_report() -> dict[str, Any]:
             "knowledge_rule_catalog": "COMPLETE" if not unmapped_lessons else "PARTIAL",
             "structured_knowledge_base": "COMPLETE" if structured_complete else "PARTIAL",
             "transcript_rule_promotion": "PARTIAL_BY_DESIGN",
-            "visual_geometry_audit": "LOCKED_WHERE_UNVERIFIED",
+            "visual_geometry_audit": "COMPLETE" if visual_certification_complete else "IN_PROGRESS_LOCKED",
+            "full_source_certification": "COMPLETE" if structured_complete and visual_certification_complete else "IN_PROGRESS",
             "profitability_validation": "SEPARATE_TMBT_RESEARCH",
         },
         "important_limit": (
