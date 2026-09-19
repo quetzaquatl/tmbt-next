@@ -32,7 +32,6 @@ DEFAULT_BACKTEST_CONTEXT = {
     "smt_lookahead_bars": 6,
     "smt_require_reclaim": True,
     "index_smt_ym_enabled": True,
-    "index_smt_ym_hard_veto": False,
     "po3_enabled": True,
     "po3_hard_veto": True,
     "asia_enabled": True,
