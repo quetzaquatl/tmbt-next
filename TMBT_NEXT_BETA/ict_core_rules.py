@@ -311,6 +311,52 @@ def profile_provenance(profile_id: str) -> dict[str, Any]:
     )
 
 
+def profile_knowledge_links(profile_id: str) -> list[str]:
+    """Broader Core knowledge relevant to a profile without claiming model origin."""
+    p = str(profile_id or "").upper()
+    if "_OTE_BOS_" in p:
+        return [
+            "CORE_OTE",
+            "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
+            "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
+            "CORE_TIMEFRAME_HIERARCHY",
+            "CORE_INSTITUTIONAL_SWING_POINTS",
+            "CORE_PD_ARRAY_MATRIX",
+        ]
+    if "_SWEEP_IFVG_" in p:
+        return [
+            "CORE_FAIR_VALUE_GAP",
+            "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
+            "CORE_TIMEFRAME_HIERARCHY",
+            "CORE_TIME_OF_DAY",
+        ]
+    if "_SILVER_BULLET_" in p:
+        links = [
+            "CORE_FAIR_VALUE_GAP",
+            "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
+            "CORE_TIME_OF_DAY",
+        ]
+        if p.startswith(("NQ_", "ES_")):
+            links += [
+                "CORE_INDEX_OPENING_RANGE",
+                "CORE_INDEX_AM_RELATIVE_HILO",
+                "CORE_INDEX_PM_SESSION",
+                "CORE_INDEX_SMT_BASKET",
+            ]
+        return links
+    if "_TTFM_" in p:
+        links = ["CORE_TIMEFRAME_HIERARCHY", "CORE_DAYTRADE_HTF_ALIGNMENT"]
+        if p.startswith(("NQ_", "ES_")):
+            links += [
+                "CORE_INDEX_OPENING_RANGE",
+                "CORE_INDEX_AM_RELATIVE_HILO",
+                "CORE_INDEX_PM_SESSION",
+                "CORE_INDEX_SMT_BASKET",
+            ]
+        return links
+    return []
+
+
 def profile_variant_metadata(profile_id: str) -> dict[str, Any]:
     """Separate original/formalized profiles from generated timeframe clones."""
     p = str(profile_id or "").upper()
@@ -378,6 +424,12 @@ def expanded_provenance(profile_id: str) -> dict[str, Any]:
     p = profile_provenance(profile_id)
     p.update(profile_variant_metadata(profile_id))
     p["knowledge_version"] = ict_core_knowledge.KNOWLEDGE_VERSION
+    p["knowledge_context_rules"] = profile_knowledge_links(profile_id)
+    p["knowledge_context_details"] = {
+        rid: deepcopy(ict_core_knowledge.RULE_CATALOG[rid])
+        for rid in p["knowledge_context_rules"]
+        if rid in ict_core_knowledge.RULE_CATALOG
+    }
     p["core_rule_details"] = {
         rid: deepcopy(CORE_RULES[rid])
         for rid in p.get("core_rules") or []
