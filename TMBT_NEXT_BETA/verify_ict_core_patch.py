@@ -12,6 +12,7 @@ NY = ZoneInfo("America/New_York")
 for name in (
     "ict_core_rules.py",
     "ict_rule_engine.py",
+    "ict_research_snapshot.py",
     "legacy_research_adapter.py",
     "research_scheduler.py",
     "context_factors.py",
@@ -21,9 +22,11 @@ for name in (
 ):
     py_compile.compile(str(HERE / name), doraise=True)
 
-from ict_core_rules import profile_provenance
+from ict_core_rules import profile_provenance, profile_variant_metadata
 from ict_rule_engine import normalize_closed_bars, fair_value_gaps, confirmed_swings, liquidity_raids, profile_pipeline_contract, snapshot
 from context_factors import DEFAULT_CONFIG, _session_context
+from databento_history_import import OUTRIGHT_RE
+import research_scheduler
 
 ote = profile_provenance("XAU_OTE_BOS_M15")
 assert ote["source_status"] == "MIXED"
@@ -37,6 +40,14 @@ assert "IFVG_FIXED_BAR_EXPIRY" in ifvg["non_core_assumptions"]
 
 silver = profile_provenance("NQ_SILVER_BULLET_M1")
 assert silver["source_status"] == "NOT_2016_17_CORE_MODEL"
+
+assert profile_variant_metadata("XAU_OTE_BOS_M15")["variant_status"] == "CANONICAL_FORMALIZED"
+assert profile_variant_metadata("XAU_OTE_BOS_H1")["variant_status"] == "GENERATED_RESEARCH_VARIANT"
+assert profile_variant_metadata("NQ_TTFM_D1_H1_M5")["variant_status"] == "DOCUMENTED_PUBLIC_MODEL_VARIANT"
+assert OUTRIGHT_RE.fullmatch("YMU26")
+assert len(research_scheduler.DEFAULT_CONFIG["profiles"]) == 15
+assert research_scheduler.DEFAULT_CONFIG["source_audited_matrix_enabled"] is True
+assert research_scheduler.DEFAULT_CONFIG["experimental_timeframe_matrix_enabled"] is False
 
 pipe = profile_pipeline_contract("XAU_SWEEP_IFVG_H1")
 assert pipe["context"]["status"] == "SOURCE_AWARE"
@@ -120,3 +131,5 @@ print("  iFVG provenance:", ifvg["source_status"], ifvg["evidence_label"])
 print("  Index OR:", ctx["index_or_low"], "->", ctx["index_or_high"], ctx["index_session_phase"])
 print("  Rule pipeline:", pipe["pipeline_version"], "· setup", pipe["setup"]["status"])
 print("  Primitive tests: FVG + liquidity raid PASS")
+print("  Canonical matrix: 15 profiles · generated TF variants opt-in")
+print("  YM importer matcher: PASS")
