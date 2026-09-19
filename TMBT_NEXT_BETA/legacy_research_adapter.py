@@ -26,6 +26,7 @@ HERE = Path(__file__).resolve().parent
 FUTURES_MARKETS = {
     "NQ": "NQ",
     "ES": "ES",
+    "YM": "YM",
     "GC": "GC",
 }
 
