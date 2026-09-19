@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],outcomeGroups:[],research:[],researchAutopilot:null,researchSync:null,researchScheduler:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,tradeReplay:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
+const state={market:"NQ",tf:"1H",source:null,bars:[],models:[],archive:[],outcomes:[],outcomeGroups:[],research:[],researchAutopilot:null,researchSync:null,researchScheduler:null,ictCoreCoverage:null,paper:null,traderNotes:"",selectedModel:null,snapshot:null,tradeReplay:null,mode:"live",pd:{},viewCount:140,offset:0,hover:null,drag:null,lastResearchStates:{},alerts:false,pdOn:true,sessions:true,yZoom:1,futureSpace:0};
 const RESEARCH_ALERT_KEY="tmbt_next_research_alerts_v1";
 const researchAlertSeen=(()=>{try{const x=JSON.parse(localStorage.getItem(RESEARCH_ALERT_KEY)||"[]");return new Set(Array.isArray(x)?x.slice(-500):[])}catch{return new Set()}})();
 let researchAlertsPrimed=false;
@@ -62,14 +62,15 @@ async function pollModels(){
 }
 async function pollResearch(){
  try{
-  const [d,n,a,s,rs]=await Promise.all([
+  const [d,n,a,s,rs,kb]=await Promise.all([
    api("/api/research?limit=12"),
    api("/api/trader-observations").catch(()=>({text:""})),
    api("/api/research-autopilot/status").catch(()=>null),
    api("/api/research-sync/status").catch(()=>null),
-   api("/api/research-scheduler/status").catch(()=>null)
+   api("/api/research-scheduler/status").catch(()=>null),
+   api("/api/ict-core-coverage").catch(()=>null)
   ]);
-  state.research=d.jobs||[];state.traderNotes=n.text||"";state.researchAutopilot=a;state.researchSync=s;state.researchScheduler=rs;renderResearch();renderReview();checkResearchAlerts(state.research);
+  state.research=d.jobs||[];state.traderNotes=n.text||"";state.researchAutopilot=a;state.researchSync=s;state.researchScheduler=rs;state.ictCoreCoverage=kb;renderResearch();renderReview();checkResearchAlerts(state.research);
   const j=state.research[0];dot("#researchDot",rs?.running||s?.running||a?.running||j&&String(j.state).toUpperCase()==="RUNNING"?"ok":"warn")
  }catch(e){}
 }
@@ -432,9 +433,11 @@ function renderResearch(){
 
  const sync=state.researchSync||{},syncOk=!!sync.healthy;
  const remote=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>Remote Research Sync</h4><small>ChatGPT ↔ TMBT Next</small></div><span class="pill ${syncOk?"signal":"idle"}">${syncOk?"ONLINE":(sync.running?"STALE":"OFFLINE")}</span></div>${sync.last_error?`<p class="bad">${esc(sync.last_error)}</p>`:""}</div>`;
+ const kb=state.ictCoreCoverage||{},kbComp=kb.completion||{},kbMachine=kb.machine_status_counts||{},kbEvidence=kb.evidence_counts||{};
+ const knowledge=`<div class="research-card research-autopilot"><div class="model-row"><div><h4>ICT Core Knowledge Base</h4><small>${esc(kb.knowledge_version||"wird geladen")}</small></div><span class="pill ${kb.all_lectures_indexed?"signal":"armed"}">${kb.lecture_count??0}/${kb.expected_lecture_count??115} LEKTIONEN</span></div><div class="model-row"><small>Rule groups: ${kb.rule_catalog_count??"—"} · Executable primitives: ${kb.executable_rule_count??"—"}</small><small>A/B/C/D: ${kbEvidence.A??0}/${kbEvidence.B??0}/${kbEvidence.C??0}/${kbEvidence.D??0}</small></div><div class="model-row"><small>Machine: READY ${kbMachine.READY??0} · PARTIAL ${kbMachine.PARTIAL??0} · REFERENCE ${kbMachine.REFERENCE??0} · VISUAL ${kbMachine.VISUAL??0}</small><small>Visual audit: ${esc(kbComp.visual_geometry_audit||"—")}</small></div><p class="muted">115/115 indexiert bedeutet vollständiger Wissensindex; chartabhängige C/VISUAL-Regeln bleiben absichtlich aus der Auto-Execution gesperrt.</p></div>`;
  const notes=state.traderNotes?`<details class="research-card trader-notes"><summary><b>Trader Thinking / Observations</b> <small>nur Notizen · keine Regeln</small></summary><pre>${esc(state.traderNotes)}</pre></details>`:"";
 
- preserveDetailsHTML($("#researchList"),remote+lab+cycle+reportsBox+auto+notes+jobs);
+ preserveDetailsHTML($("#researchList"),remote+knowledge+lab+cycle+reportsBox+auto+notes+jobs);
  $("#researchAutopilotStart")?.addEventListener("click",()=>researchAutopilotAction("start"));
  $("#researchAutopilotStop")?.addEventListener("click",()=>researchAutopilotAction("stop"));
 }
