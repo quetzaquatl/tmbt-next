@@ -213,7 +213,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.57-beta-startup-recovery"
+core.APP_VERSION = "0.9.59-beta-source-pipeline"
 
 
 class Handler(ready.Handler):
