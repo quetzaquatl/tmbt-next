@@ -2,6 +2,25 @@
 
 This document describes what TMBT Next may claim as sourced ICT Core logic versus what remains a TMBT/later-model research convention.
 
+## Complete Core knowledge base
+
+Structured Core knowledge now lives in `TMBT_NEXT_BETA/ict_core_knowledge.py`.
+
+Coverage:
+- 115/115 lectures indexed across Months 1-12.
+- 115/115 lesson-level knowledge summaries.
+- 115/115 lectures mapped to one or more source-aware rule families.
+- 88 source-aware rule families at the current knowledge version.
+- Search supports concepts, titles, `lesson 98` / `lektion 98`, and `month 10` / `monat 10`.
+- JSON export: `TMBT_NEXT_BETA/ict_core_knowledge_export.py`.
+- Studio API: `/api/ict-core-coverage` and `/api/ict-core-knowledge`.
+- The Research UI includes a searchable ICT Core Knowledge Base card.
+
+"Complete" here means structured lesson/concept coverage. It does not mean every
+chart-dependent visual geometry is safe to execute. C/VISUAL rules remain locked
+until their exact visual conditions are source-faithfully verified. The system
+also does not store or reproduce full copyrighted transcripts.
+
 ## Pipeline contract
 
 All source-aware research is separated into five layers:
@@ -130,6 +149,8 @@ or:
 ~~~
 
 The verification checks:
+- 115/115 lecture index, lesson notes and rule mapping;
+- structured knowledge-base completion;
 - provenance separation;
 - canonical vs generated variants;
 - three-candle FVG detection;
