@@ -575,6 +575,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
     except Exception:
         profile_meta = {}
     provenance = dict(profile_meta.get("provenance") or {})
+    pipeline_contract = dict(profile_meta.get("pipeline_contract") or {})
 
     baseline = {}
     for stage in report.get("stages") or []:
@@ -646,6 +647,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
         "profile": report.get("profile"),
         "label": report.get("label"),
         "provenance": provenance,
+        "pipeline_contract": pipeline_contract,
         "finished_at_utc": report.get("finished_at_utc"),
         "verdict": verdict,
         "candidate_state": candidate_state,
@@ -686,6 +688,8 @@ def _markdown(analysis: dict[str, Any]) -> str:
         f"- Evidence: **{(analysis.get('provenance') or {}).get('evidence_label') or (analysis.get('provenance') or {}).get('evidence_class') or 'D'}**",
         f"- Core rules: {', '.join((analysis.get('provenance') or {}).get('core_rules') or []) or '-'}",
         f"- Non-core/TMBT assumptions: {', '.join((analysis.get('provenance') or {}).get('non_core_assumptions') or []) or '-'}",
+        f"- Pipeline: **{(analysis.get('pipeline_contract') or {}).get('pipeline_version') or '-'}**",
+        f"- Setup layer: **{((analysis.get('pipeline_contract') or {}).get('setup') or {}).get('status') or '-'}** · Core events auto-entry: {bool(((analysis.get('pipeline_contract') or {}).get('setup') or {}).get('auto_infer_from_core_events', False))}",
         "",
         "## Was gut lief",
     ]
