@@ -12,7 +12,7 @@ from typing import Iterable
 from zoneinfo import ZoneInfo
 
 ROOTS = ("NQ", "ES", "YM", "GC")
-OUTRIGHT_RE = re.compile(r"^(?:NQ|ES|YM|GC)[FGHJKMNQUVXZ]\\d{1,2}$")
+OUTRIGHT_RE = re.compile(r"^(?:NQ|ES|YM|GC)[FGHJKMNQUVXZ]\d{1,2}$")
 TF_WIDTHS = {
     "5m": 5 * 60_000,
     "15m": 15 * 60_000,
