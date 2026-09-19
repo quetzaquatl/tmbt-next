@@ -245,7 +245,7 @@ def start_browser_after_server_ready() -> None:
     except Exception:
         port = 8510
 
-    url = f"http://127.0.0.1:{port}/?v=0957"
+    url = f"http://127.0.0.1:{port}/?v=0958"
 
     def worker() -> None:
         deadline = time.monotonic() + 75.0
