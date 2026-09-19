@@ -421,24 +421,29 @@ def core_rule_gate(rule_id: str) -> dict[str, Any]:
     knowledge_id = EXECUTABLE_TO_KNOWLEDGE.get(rid)
     knowledge = ict_core_knowledge.RULE_CATALOG.get(knowledge_id or "") or {}
     visual_gap = ict_core_knowledge.VISUAL_AUDIT_GAPS.get(knowledge_id or "")
+    visual_locked = bool(
+        visual_gap and str(visual_gap.get("status") or "").upper() == "LOCKED"
+    )
     evidence = str(rule.get("evidence_class") or "")
+    machine_status = str(knowledge.get("machine_status") or "")
     executable = bool(
         rule
         and evidence in {"A", "B"}
-        and not visual_gap
-        and str(knowledge.get("machine_status") or "") not in {"VISUAL"}
+        and not visual_locked
+        and machine_status == "READY"
     )
     return {
         "rule_id": rid,
         "knowledge_rule_id": knowledge_id,
         "evidence_class": evidence or None,
         "machine_status": knowledge.get("machine_status"),
-        "visual_locked": bool(visual_gap),
+        "visual_audit_status": (visual_gap or {}).get("status"),
+        "visual_locked": visual_locked,
         "execution_allowed": executable,
         "reason": (
             "source-certified deterministic primitive"
             if executable
-            else "locked: visual/source geometry or non-executable evidence class"
+            else "locked: rule is not READY, has unresolved visual/source geometry, or uses a non-executable evidence class"
         ),
     }
 
