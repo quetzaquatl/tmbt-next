@@ -16,6 +16,7 @@ import pandas as pd
 import historical_store
 import ttfm_engine
 import legacy_runtime
+import ict_core_rules
 
 WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 HERE = Path(__file__).resolve().parent
@@ -823,6 +824,17 @@ def activate() -> dict[str, Any]:
         return report
 
     research_autopilot.run = run_with_full_history_audit
+
+    # Attach source provenance after all compatibility profiles have been
+    # registered. The research engine may optimize TMBT assumptions, but the
+    # resulting report must keep Core-sourced rules separate from later/TMBT
+    # conventions (notably iFVG, Silver Bullet, EBP and the exact TTFM gates).
+    for _profile_id, _profile in list(research_autopilot.PROFILES.items()):
+        if isinstance(_profile, dict):
+            research_autopilot.PROFILES[_profile_id] = ict_core_rules.annotate_profile(
+                _profile_id,
+                _profile,
+            )
 
 
     _MODULES = {
