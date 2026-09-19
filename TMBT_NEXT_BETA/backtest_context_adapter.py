@@ -8,7 +8,7 @@ import smt_trade_management
 
 
 def load_local_databento_bars(market: str, timeframe: str, as_of_ms: int, limit: int) -> list[dict[str, Any]]:
-    """Use the locally imported Databento NQ/ES/GC store.
+    """Use the locally imported Databento NQ/ES/YM/GC store.
 
     This keeps the historical engine point-in-time safe: historical_store only
     returns bars that were fully closed at or before as_of_ms.
