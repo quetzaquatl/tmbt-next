@@ -47,6 +47,12 @@ BACKTEST_FIELDS = [
     "ctx_midnight_position",
     "ctx_midnight_bull_reclaim",
     "ctx_midnight_bear_reclaim",
+    "ctx_index_session_phase",
+    "ctx_index_or_high",
+    "ctx_index_or_low",
+    "ctx_index_or_complete",
+    "ctx_index_am_active",
+    "ctx_index_pm_active",
 ]
 
 
@@ -109,6 +115,32 @@ def _session_context(bars: list[dict[str, Any]], as_of_ms: int | None = None, cf
     asia_end = day + timedelta(hours=cfg.asia_end_hour_ny)
     asia = [b for b in bars if asia_start <= _dt(b["t"]) < asia_end]
     current = [b for b in bars if day <= _dt(b["t"]) <= as_of]
+
+    # ICT Core Month 10 index-futures clock context. These are descriptive,
+    # point-in-time-safe features only; they do not auto-trigger a trade.
+    index_or_start = day + timedelta(hours=9, minutes=30)
+    index_or_end = day + timedelta(hours=10, minutes=30)
+    index_am_end = day + timedelta(hours=12)
+    index_pm_start = day + timedelta(hours=13)
+    index_pm_end = day + timedelta(hours=16)
+    index_or = [b for b in current if index_or_start <= _dt(b["t"]) < index_or_end]
+    index_or_high = max((b["h"] for b in index_or), default=None)
+    index_or_low = min((b["l"] for b in index_or), default=None)
+    index_or_complete = as_of >= index_or_end
+
+    if as_of < index_or_start:
+        index_session_phase = "PRE_RTH"
+    elif as_of < index_or_end:
+        index_session_phase = "OPENING_RANGE"
+    elif as_of < index_am_end:
+        index_session_phase = "AM_AFTER_OR"
+    elif as_of < index_pm_start:
+        index_session_phase = "MIDDAY"
+    elif as_of < index_pm_end:
+        index_session_phase = "PM"
+    else:
+        index_session_phase = "AFTER_RTH"
+
     if not asia:
         return {
             "available": False,
@@ -196,6 +228,14 @@ def _session_context(bars: list[dict[str, Any]], as_of_ms: int | None = None, cf
         "midnight_position": midnight_position,
         "midnight_bull_reclaim": bull_midnight_reclaim,
         "midnight_bear_reclaim": bear_midnight_reclaim,
+        "index_session_phase": index_session_phase,
+        "index_or_start_ny": index_or_start.isoformat(),
+        "index_or_end_ny": index_or_end.isoformat(),
+        "index_or_high": index_or_high,
+        "index_or_low": index_or_low,
+        "index_or_complete": bool(index_or_complete),
+        "index_am_active": bool(index_or_start <= as_of < index_am_end),
+        "index_pm_active": bool(index_pm_start <= as_of < index_pm_end),
         "last_price": current[-1]["c"] if current else bars[-1]["c"],
     }
 
