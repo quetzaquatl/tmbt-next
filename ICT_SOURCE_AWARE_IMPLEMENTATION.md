@@ -16,10 +16,14 @@ Coverage:
 - Studio API: `/api/ict-core-coverage` and `/api/ict-core-knowledge`.
 - The Research UI includes a searchable ICT Core Knowledge Base card.
 
-"Complete" here means structured lesson/concept coverage. It does not mean every
-chart-dependent visual geometry is safe to execute. C/VISUAL rules remain locked
-until their exact visual conditions are source-faithfully verified. The system
-also does not store or reproduce full copyrighted transcripts.
+The source-rule audit is also complete at the rule-family level: every previously
+open rule family now has either text-certified numeric/geometry evidence or an
+explicit contextual/reference classification. There are no unresolved source-audit
+LOCKED rule families. This does **not** claim that all 53+ hours were manually
+watched frame-by-frame, and it does not turn contextual knowledge into mechanical
+execution. PARTIAL/REFERENCE rules remain non-executable unless a separate READY
+primitive and model-specific execution contract exist. The repository stores
+compact paraphrases/timestamps, not full copyrighted transcripts.
 
 ## Pipeline contract
 
@@ -39,7 +43,7 @@ Implementation: TMBT_NEXT_BETA/ict_rule_engine.py
 
 - **A / EXPLICIT_CORE** — explicit Core rule/definition.
 - **B / DERIVED_CORE** — deterministic software interpretation built from A-rules.
-- **C / VISUAL_CONFIRMATION_REQUIRED** — exact chart geometry still needs visual-source confirmation.
+- **C / VISUAL_CONFIRMATION_REQUIRED** — use only where a remaining exact chart reduction cannot be justified textually; never auto-executable.
 - **D / TMBT_RESEARCH_OR_LATER_ICT** — TMBT research convention or later ICT model; not a 2016/17 Core rule.
 
 Registry: TMBT_NEXT_BETA/ict_core_rules.py
@@ -47,15 +51,14 @@ Registry: TMBT_NEXT_BETA/ict_core_rules.py
 ## Implemented Core primitives
 
 ### OTE / Premium-Discount
-- 50% equilibrium.
-- OTE zone 62%-79%.
-- 70.5% reference.
-- Selecting the active swing/dealing range remains a TMBT quantification unless a profile defines it more specifically.
+- 50% equilibrium is source-certified.
+- 62%, 70.5% and 79% OTE references are explicitly source-certified from Month 1; 70.5% is the stated sweet spot.
+- Selecting the active swing/dealing range remains contextual/TMBT-quantified unless a profile defines it more specifically.
 
 ### Fair Value Gap
-- Three-candle imbalance primitive is implemented.
-- The engine reports zone, CE, later touch and full traversal.
-- The primitive intentionally does **not** call touch/traversal mitigation, invalidation or an entry signal without a model-specific rule.
+- The three-candle gap geometry is source-certified from Month 4 Lesson 36.
+- The engine reports the source-timeframe zone, CE, later touch and full traversal.
+- The primitive intentionally does **not** call touch/traversal mitigation, inversion, expiry, invalidation or an entry signal without a separately sourced/model-specific rule.
 
 ### Liquidity
 - Old highs/lows are treated as structural liquidity references.
@@ -150,7 +153,10 @@ or:
 
 The verification checks:
 - 115/115 lecture index, lesson notes and rule mapping;
-- structured knowledge-base completion;
+- structured knowledge-base completion and complete rule-source audit;
+- zero unresolved source-audit LOCKED rule families;
+- OTE/FVG source-certified primitive gates;
+- PARTIAL/REFERENCE rules remaining non-executable;
 - provenance separation;
 - canonical vs generated variants;
 - three-candle FVG detection;
@@ -165,4 +171,5 @@ The verification checks:
 - No Core rule automatically promotes a model to live.
 - Holdout/OOS remains locked until the existing manual review gate.
 - Generated timeframe variants are discovery experiments only.
-- If a rule depends on chart geometry that cannot be supported textually, it remains evidence class C until visually audited.
+- A manual frame-by-frame viewing of all 53+ hours is not claimed. If future source review reveals a contradiction, the affected rule is downgraded/locked rather than silently preserved.
+- Text-certified contextual/reference knowledge is not automatically executable; only READY A/B primitives pass the deterministic Core gate.
