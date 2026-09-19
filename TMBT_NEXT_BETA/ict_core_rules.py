@@ -37,33 +37,35 @@ EXECUTABLE_TO_KNOWLEDGE = {
 CORE_RULES: dict[str, dict[str, Any]] = {
     "ICT_CORE_OTE_ZONE": {
         "concept": "OTE / Premium-Discount",
-        "human_rule": "A relevant impulse swing is divided around 50% equilibrium; OTE is a retracement zone around 62%-79% with 70.5% as a reference.",
+        "human_rule": "50% equilibrium is source-backed inside a relevant range. OTE is taught as a deep retracement concept, but the exact Fib labels/zone boundaries remain visually locked until certified against the original chart/Fib presentation.",
         "machine_interpretation": {
             "equilibrium_pct": 50.0,
-            "ote_zone_min_pct": 62.0,
-            "ote_reference_pct": 70.5,
-            "ote_zone_max_pct": 79.0,
+            "ote_zone_min_pct": None,
+            "ote_reference_pct": None,
+            "ote_zone_max_pct": None,
+            "exact_ote_geometry_locked": True,
         },
         "timeframe_scope": "multi-timeframe",
         "session_scope": "context dependent",
         "source_month": 1,
-        "source_lesson": 4,
-        "source_timestamp": "09:35-10:38; 29:19-29:45; 43:39+",
-        "evidence_class": "A",
+        "source_lesson": "4, 5",
+        "source_timestamp": "lesson-level transcript evidence; exact Fib presentation visual",
+        "evidence_class": "C",
     },
     "ICT_CORE_FVG_3_CANDLE": {
         "concept": "Fair Value Gap",
-        "human_rule": "A Fair Value Gap is an imbalance visible as a three-candle gap between candle one and candle three around the displacement candle.",
+        "human_rule": "The Core teaches a multi-candle one-sided delivery imbalance around displacement. TMBT's exact three-candle wick-gap detector remains a research-compatible quantification until the original chart geometry is visually certified.",
         "machine_interpretation": {
-            "bullish": "high[t-1] < low[t+1]",
-            "bearish": "low[t-1] > high[t+1]",
+            "research_candidate_bullish": "high[t-1] < low[t+1]",
+            "research_candidate_bearish": "low[t-1] > high[t+1]",
+            "canonical_geometry_locked": True,
         },
         "timeframe_scope": "multi-timeframe",
         "session_scope": "none",
         "source_month": 4,
         "source_lesson": 36,
-        "source_timestamp": "00:36-06:24",
-        "evidence_class": "B",
+        "source_timestamp": "lesson-level transcript evidence; exact wick/body geometry visual",
+        "evidence_class": "C",
     },
     "ICT_CORE_LIQUIDITY_OLD_EXTREMES": {
         "concept": "Liquidity",
@@ -406,6 +408,44 @@ def profile_variant_metadata(profile_id: str) -> dict[str, Any]:
         "generated_timeframe_variant": False,
         "variant_note": "",
     }
+
+
+def core_rule_gate(rule_id: str) -> dict[str, Any]:
+    """Return whether a Core rule may participate in deterministic execution.
+
+    A/B provenance alone is not enough when the broader knowledge record has a
+    locked visual audit gap. C/D rules are always non-executable.
+    """
+    rid = str(rule_id or "")
+    rule = CORE_RULES.get(rid) or {}
+    knowledge_id = EXECUTABLE_TO_KNOWLEDGE.get(rid)
+    knowledge = ict_core_knowledge.RULE_CATALOG.get(knowledge_id or "") or {}
+    visual_gap = ict_core_knowledge.VISUAL_AUDIT_GAPS.get(knowledge_id or "")
+    evidence = str(rule.get("evidence_class") or "")
+    executable = bool(
+        rule
+        and evidence in {"A", "B"}
+        and not visual_gap
+        and str(knowledge.get("machine_status") or "") not in {"VISUAL"}
+    )
+    return {
+        "rule_id": rid,
+        "knowledge_rule_id": knowledge_id,
+        "evidence_class": evidence or None,
+        "machine_status": knowledge.get("machine_status"),
+        "visual_locked": bool(visual_gap),
+        "execution_allowed": executable,
+        "reason": (
+            "source-certified deterministic primitive"
+            if executable
+            else "locked: visual/source geometry or non-executable evidence class"
+        ),
+    }
+
+
+def production_safe_core_rules(rule_ids: list[str] | None = None) -> list[str]:
+    ids = list(rule_ids or CORE_RULES.keys())
+    return [rid for rid in ids if core_rule_gate(rid)["execution_allowed"]]
 
 
 def knowledge_coverage() -> dict[str, Any]:
