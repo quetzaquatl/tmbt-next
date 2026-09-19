@@ -17,6 +17,7 @@ import historical_store
 import ttfm_engine
 import legacy_runtime
 import ict_core_rules
+import ict_rule_engine
 
 WORKSPACE = Path(os.environ.get("TMBT_WORKSPACE", r"D:\Projekt model\Trading_Model_Backtest_Studio_WORKSPACE")).resolve()
 HERE = Path(__file__).resolve().parent
@@ -832,10 +833,12 @@ def activate() -> dict[str, Any]:
     # conventions (notably iFVG, Silver Bullet, EBP and the exact TTFM gates).
     for _profile_id, _profile in list(research_autopilot.PROFILES.items()):
         if isinstance(_profile, dict):
-            research_autopilot.PROFILES[_profile_id] = ict_core_rules.annotate_profile(
+            _annotated = ict_core_rules.annotate_profile(
                 _profile_id,
                 _profile,
             )
+            _annotated["pipeline_contract"] = ict_rule_engine.profile_pipeline_contract(_profile_id)
+            research_autopilot.PROFILES[_profile_id] = _annotated
 
 
     _MODULES = {
