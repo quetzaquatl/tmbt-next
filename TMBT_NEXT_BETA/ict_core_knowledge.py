@@ -1197,8 +1197,15 @@ def coverage_report() -> dict[str, Any]:
     for rule in RULE_CATALOG.values():
         machine_counts[rule["machine_status"]] = machine_counts.get(rule["machine_status"], 0) + 1
         evidence_counts[rule["evidence_class"]] = evidence_counts.get(rule["evidence_class"], 0) + 1
+    structured_complete = (
+        len(LECTURES) == 115
+        and len(LESSON_FOCUS) == 115
+        and len(LESSON_KNOWLEDGE) == 115
+        and not unmapped_lessons
+    )
     return {
         "knowledge_version": KNOWLEDGE_VERSION,
+        "structured_knowledge_complete": structured_complete,
         "lecture_count": len(LECTURES),
         "expected_lecture_count": 115,
         "months": 12,
@@ -1218,13 +1225,16 @@ def coverage_report() -> dict[str, Any]:
             "corpus_index": "COMPLETE",
             "outline_focus_index": "COMPLETE" if len(LESSON_FOCUS) == 115 else "PARTIAL",
             "lesson_level_paraphrase": "COMPLETE" if len(LESSON_KNOWLEDGE) == 115 else "PARTIAL",
-            "knowledge_rule_catalog": "ACTIVE",
-            "transcript_rule_promotion": "IN_PROGRESS",
-            "visual_geometry_audit": "IN_PROGRESS",
+            "knowledge_rule_catalog": "COMPLETE" if not unmapped_lessons else "PARTIAL",
+            "structured_knowledge_base": "COMPLETE" if structured_complete else "PARTIAL",
+            "transcript_rule_promotion": "PARTIAL_BY_DESIGN",
+            "visual_geometry_audit": "LOCKED_WHERE_UNVERIFIED",
             "profitability_validation": "SEPARATE_TMBT_RESEARCH",
         },
         "important_limit": (
-            "115/115 indexed does not mean every chart-dependent geometry is executable. "
-            "C/VISUAL rules remain locked until source-faithful visual confirmation."
+            "Structured knowledge coverage is complete at lesson/concept level. "
+            "This does not claim sentence-by-sentence transcript reproduction or "
+            "frame-by-frame chart verification. C/VISUAL rules remain locked until "
+            "source-faithful visual confirmation."
         ),
     }
