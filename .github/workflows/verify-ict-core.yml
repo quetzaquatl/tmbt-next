@@ -1,0 +1,36 @@
+name: Verify ICT Core Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "TMBT_NEXT_BETA/ict_core_knowledge.py"
+      - "TMBT_NEXT_BETA/ict_core_rules.py"
+      - "TMBT_NEXT_BETA/ict_rule_engine.py"
+      - "TMBT_NEXT_BETA/ict_core_knowledge_export.py"
+      - "TMBT_NEXT_BETA/verify_ict_core_patch.py"
+      - "TMBT_NEXT_BETA/context_factors.py"
+      - "TMBT_NEXT_BETA/backtest_context_adapter.py"
+      - "TMBT_NEXT_BETA/historical_store.py"
+      - "TMBT_NEXT_BETA/databento_history_import.py"
+      - "TMBT_NEXT_BETA/legacy_research_adapter.py"
+      - "TMBT_NEXT_BETA/research_scheduler.py"
+      - ".github/workflows/verify-ict-core.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: TMBT_NEXT_BETA
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and verify ICT Core source audit
+        run: python verify_ict_core_patch.py
