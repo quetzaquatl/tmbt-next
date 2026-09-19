@@ -822,6 +822,272 @@ RULE_CATALOG: dict[str, dict[str, Any]] = {
     },
 }
 
+
+# Additional recurring logic families needed for complete lesson coverage. They are
+# kept separate from the small executable primitive registry on purpose.
+RULE_CATALOG.update({
+    "CORE_MARKET_PROTRACTION": {
+        "concept": "market_protraction",
+        "summary": "Expected delivery is time-sensitive; when price fails to progress within the expected session/time context, the original premise loses quality.",
+        "lessons": [8, 77, 115],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_LOW_RISK_SETUP_FRAMING": {
+        "concept": "setup_framing",
+        "summary": "A lower-risk setup combines directional/contextual premise, a precise institutional reference and a nearby invalidation rather than reducing risk by arbitrary stop compression.",
+        "lessons": [10, 14, 53, 79],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_OUTCOME_DISTRIBUTION_DISCIPLINE": {
+        "concept": "performance_psychology",
+        "summary": "Judge a model over a sample of trades and accept normal losses; return targets are not guaranteed by a single setup.",
+        "lessons": [9, 11, 12, 13],
+        "evidence_class": "A",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_LOSS_MITIGATION_REENTRY": {
+        "concept": "loss_mitigation",
+        "summary": "Reduce or exit invalidated exposure and only re-enter when the underlying premise and a fresh valid setup still exist.",
+        "lessons": [13, 51, 56],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_HIGH_REWARD_SELECTION": {
+        "concept": "setup_selection",
+        "summary": "Higher-reward opportunities are selected by aligning top-down directional context, clear liquidity objectives and an efficient entry location.",
+        "lessons": [14, 57, 58, 59, 62, 64],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_MARKET_MAKER_TRAP_CONTEXT": {
+        "concept": "market_maker_traps",
+        "summary": "Conventional chart expectations such as false flags, breakouts, trendline breaks and head-and-shoulders can be liquidity narratives; institutional context decides whether they matter.",
+        "lessons": [15, 16, 23, 24],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_INSTITUTIONAL_SPONSORSHIP": {
+        "concept": "institutional_sponsorship",
+        "summary": "A setup is stronger when directional price delivery shows institutional sponsorship toward a clear liquidity/PD-array objective.",
+        "lessons": [11, 19, 58, 106],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_POWER_OF_THREE": {
+        "concept": "power_of_three",
+        "summary": "Accumulation, manipulation and distribution are used as a delivery framework; the sequence is contextual and should not be reduced to one fixed candle count.",
+        "lessons": [19, 67, 73, 88],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_MACRO_TO_MICRO": {
+        "concept": "macro_to_micro",
+        "summary": "Establish macro directional context from rates/bonds, dollar and related assets before moving down to technical execution.",
+        "lessons": [22, 25, 44, 45, 46, 47, 107, 112],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_QUARTERLY_SHIFT": {
+        "concept": "quarterly_shift",
+        "summary": "Quarterly shifts describe changes in intermediate-term institutional delivery and are used with IPDA ranges to update the higher-timeframe narrative.",
+        "lessons": [39, 112],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_TEN_YEAR_RATE_FILTER": {
+        "concept": "rates_10y",
+        "summary": "10-year notes/yields can qualify currency and macro directional premises through rate and correlation behavior.",
+        "lessons": [44, 45],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_INTEREST_RATE_DIFFERENTIAL": {
+        "concept": "rate_differential",
+        "summary": "Compare interest-rate relationships/differentials to help select which currency/side has the stronger macro premise.",
+        "lessons": [25, 46],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_STOP_ENTRY_TECHNIQUE": {
+        "concept": "entry_stop_order",
+        "summary": "A stop-entry can require price confirmation through a predefined level before participation, trading worse price for confirmation.",
+        "lessons": [30, 54, 64],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_LIMIT_ENTRY_TECHNIQUE": {
+        "concept": "entry_limit_order",
+        "summary": "A limit entry seeks improved price at a predefined institutional reference but introduces non-fill and touch-versus-fill risk.",
+        "lessons": [55, 56, 64],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_POSITION_TRADE_MANAGEMENT": {
+        "concept": "position_management",
+        "summary": "Manage longer-duration positions from structural objectives and evolving invalidation, including partials and progressive stop decisions rather than bar-by-bar noise.",
+        "lessons": [51, 56, 64],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_SWING_TRADING_MODEL": {
+        "concept": "swing_trading",
+        "summary": "Swing trading begins with monthly/weekly direction and clear institutional objectives, then uses lower-timeframe retracement/entry references.",
+        "lessons": [57, 58, 59, 60, 61, 62, 63, 64],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_SWING_3R_PLANNING": {
+        "concept": "swing_reward_risk",
+        "summary": "The swing-trading teaching uses approximately three units of potential reward for one unit of initial risk as a planning/filter reference when structure allows.",
+        "lessons": [59, 62],
+        "evidence_class": "A",
+        "machine_status": "READY",
+        "scope": "swing-model planning reference; not a universal exit rule",
+    },
+    "CORE_MONTHLY_WEEKLY_RANGE_SHORT_TERM": {
+        "concept": "monthly_weekly_ranges",
+        "summary": "Short-term trades are nested inside monthly/weekly range location so intraday entries serve the larger draw rather than contradict it.",
+        "lessons": [65, 66, 67, 71, 72, 73],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_WEEKLY_MANIPULATION_TEMPLATES": {
+        "concept": "weekly_manipulation",
+        "summary": "Weekly manipulation templates describe recurring staged delivery around early-week highs/lows; they are conditional templates, not guaranteed weekday behavior.",
+        "lessons": [66, 67, 71],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_INTRAWEEK_REVERSAL": {
+        "concept": "intraweek_reversal",
+        "summary": "An intraweek reversal is evaluated from overlapping higher-timeframe models and weekly range position rather than from day-of-week alone.",
+        "lessons": [66, 67, 71],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_ONE_SHOT_ONE_KILL": {
+        "concept": "one_shot_one_kill",
+        "summary": "The OSOK model is a selective weekly framework combining macro/COT bias with a higher-timeframe institutional setup; it is not an every-week signal.",
+        "lessons": [72],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_DAILY_RANGE_SESSION": {
+        "concept": "daily_range",
+        "summary": "Define the trading day using the relevant New York/CME session boundaries rather than assuming midnight-to-midnight calendar bars.",
+        "lessons": [74, 88, 115],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_DAILY_RANGE_PROJECTION": {
+        "concept": "daily_range_projection",
+        "summary": "Project plausible daily extremes from session range statistics/CBDR and directional context; projections are objectives, not guaranteed destinations.",
+        "lessons": [76, 77, 82, 115],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_INTRADAY_PROFILE": {
+        "concept": "intraday_profile",
+        "summary": "Intraday profiles classify likely day structure from pre-New-York range, CBDR/midnight context and session delivery.",
+        "lessons": [77, 84, 85, 95, 96, 97, 99, 100, 101],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_DAYTRADE_HTF_ALIGNMENT": {
+        "concept": "daytrade_alignment",
+        "summary": "A daytrade should refine an existing higher-timeframe directional premise; lower-timeframe timing does not replace the HTF draw on liquidity.",
+        "lessons": [73, 79, 80, 88, 114, 115],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_SENTIMENT_CONTEXT": {
+        "concept": "sentiment",
+        "summary": "Sentiment is a contextual qualifier used alongside opening price, higher-timeframe direction and institutional references, not as a standalone trigger.",
+        "lessons": [14, 81, 113],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_ZERO_GMT_PIVOT_CONTEXT": {
+        "concept": "zero_gmt",
+        "summary": "Zero-GMT/session pivots are intraday time references used with Asian range and daily-range projections to frame expected delivery.",
+        "lessons": [82],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_ASIAN_SCALP_MODEL": {
+        "concept": "asian_scalp",
+        "summary": "The short FX scalp example uses Asian-session range and short-term extremes; pip targets and exact execution are market-specific and should not be ported to futures.",
+        "lessons": [83],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_BREAD_AND_BUTTER_DAYTRADE": {
+        "concept": "bread_and_butter",
+        "summary": "Bullish/bearish bread-and-butter templates combine directional repricing, London/Judas behavior, time of day and range-aware objectives.",
+        "lessons": [86, 87],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_DAYTRADE_ROUTINE": {
+        "concept": "daytrade_routine",
+        "summary": "Maintain the higher-timeframe inventory and directional order flow first, then use session timing plus breaker/OTE/other references for execution planning.",
+        "lessons": [88, 114, 115],
+        "evidence_class": "B",
+        "machine_status": "PARTIAL",
+    },
+    "CORE_COMMODITY_CARRY_STRUCTURE": {
+        "concept": "commodity_carry",
+        "summary": "Commodity premium/carrying-charge and spread relationships can reveal commercial conditions and qualify higher-timeframe opportunity.",
+        "lessons": [92, 93, 108],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_BOND_OPENING_RANGE": {
+        "concept": "bond_opening_range",
+        "summary": "Bond analysis uses an opening-range framework plus relative/volume behavior to classify the session before selecting a setup.",
+        "lessons": [94],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_BOND_SPLIT_SESSION": {
+        "concept": "bond_split_session",
+        "summary": "Bond sessions are split into AM/PM structures so continuation and reversal expectations are conditioned on the completed first session.",
+        "lessons": [95],
+        "evidence_class": "C",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_BOND_DAY_TYPE": {
+        "concept": "bond_day_type",
+        "summary": "Economic-calendar, overnight-range and volatility context help distinguish bond consolidation days from trend days before execution.",
+        "lessons": [96, 97],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_STOCK_RELATIVE_WATCHLIST": {
+        "concept": "stock_watchlist",
+        "summary": "Stock selection starts with broad-index/seasonal direction, then ranks individual names by relative strength or weakness before any options/execution decision.",
+        "lessons": [103, 104, 105, 106],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_MULTI_ASSET_SYSTEM": {
+        "concept": "multi_asset_system",
+        "summary": "Treat bonds, rates, dollar, commodities and equities as an interacting system and seek confirmation/divergence across assets for higher-timeframe analysis.",
+        "lessons": [47, 107, 112],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+    "CORE_MEGA_TRADE_SELECTION": {
+        "concept": "mega_trades",
+        "summary": "Large commodity, FX, stock and bond opportunities are selected from macro/seasonal/relative-strength alignment; the asset-specific implementation differs by market.",
+        "lessons": [108, 109, 110, 111],
+        "evidence_class": "B",
+        "machine_status": "REFERENCE",
+    },
+})
+
 CONCEPT_INDEX: dict[str, list[str]] = {}
 for rule_id, rule in RULE_CATALOG.items():
     CONCEPT_INDEX.setdefault(str(rule["concept"]), []).append(rule_id)
@@ -879,6 +1145,12 @@ def coverage_report() -> dict[str, Any]:
             "lessons": b - a + 1,
             "indexed": sum(1 for x in LECTURES if x["month"] == month),
         }
+    mapped_lessons = {
+        int(n)
+        for rule in RULE_CATALOG.values()
+        for n in (rule.get("lessons") or [])
+    }
+    unmapped_lessons = [n for n in range(1, 116) if n not in mapped_lessons]
     machine_counts = {}
     evidence_counts = {}
     for rule in RULE_CATALOG.values():
@@ -896,6 +1168,8 @@ def coverage_report() -> dict[str, Any]:
         "lesson_knowledge_count": len(LESSON_KNOWLEDGE),
         "lesson_knowledge_complete": len(LESSON_KNOWLEDGE) == 115,
         "rule_catalog_count": len(RULE_CATALOG),
+        "rule_mapped_lecture_count": len(mapped_lessons),
+        "unmapped_lessons": unmapped_lessons,
         "machine_status_counts": machine_counts,
         "evidence_counts": evidence_counts,
         "by_month": by_month,
