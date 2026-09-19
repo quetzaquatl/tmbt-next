@@ -9,6 +9,8 @@ from urllib.parse import urlparse, parse_qs
 
 import context_factors
 import historical_store
+import ict_core_knowledge
+import ict_core_rules
 import research_autopilot_bridge
 import research_sync_bridge
 import research_scheduler
@@ -227,6 +229,27 @@ class Handler(ready.Handler):
             ctx = context_factors.build_context(ready.ready_query, _cfg(target))
             ctx["symmetric_smt"] = smt_trade_management.symmetric_smt(ctx)
             return self.json(ctx)
+        if u.path == "/api/ict-core-coverage":
+            return self.json(ict_core_rules.knowledge_coverage())
+        if u.path == "/api/ict-core-knowledge":
+            q = parse_qs(u.query)
+            lesson_raw = str(q.get("lesson", [""])[0]).strip()
+            search_raw = str(q.get("q", [""])[0]).strip()
+            if lesson_raw:
+                try:
+                    return self.json(ict_core_knowledge.lecture(int(lesson_raw)))
+                except Exception:
+                    return self.json({"error": "lesson_not_found", "lesson": lesson_raw}, 404)
+            if search_raw:
+                return self.json(ict_core_knowledge.search(search_raw))
+            return self.json({
+                "knowledge_version": ict_core_knowledge.KNOWLEDGE_VERSION,
+                "coverage": ict_core_rules.knowledge_coverage(),
+                "rules": {
+                    rid: {"rule_id": rid, **rule}
+                    for rid, rule in ict_core_knowledge.RULE_CATALOG.items()
+                },
+            })
         if u.path == "/api/data-settings":
             return self.json(_masked_secret_status())
         if u.path == "/api/historical-status":
