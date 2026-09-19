@@ -31,6 +31,8 @@ DEFAULT_BACKTEST_CONTEXT = {
     "smt_pivot_right": 2,
     "smt_lookahead_bars": 6,
     "smt_require_reclaim": True,
+    "index_smt_ym_enabled": True,
+    "index_smt_ym_hard_veto": False,
     "po3_enabled": True,
     "po3_hard_veto": True,
     "asia_enabled": True,
@@ -103,6 +105,49 @@ def context_at(
         cfg=cfg,
     )
     ctx["symmetric_smt"] = smt_trade_management.symmetric_smt(ctx)
+
+    # Month-10 Index SMT uses ES/NQ/YM as a correlated basket. Keep the
+    # existing NQ/ES gate unchanged for backwards compatibility, but add a
+    # descriptive target-vs-YM comparison whenever YM history is available.
+    # It is intentionally advisory until the three-index correspondence rules
+    # have their own locked validation pass.
+    options = dict(DEFAULT_BACKTEST_CONTEXT)
+    options.update(overrides or {})
+    if options.get("index_smt_ym_enabled", True) and target in {"NQ", "ES"}:
+        try:
+            ym_rows = load_bars("YM", cfg.smt_tf, as_of_ms, 700) or []
+        except Exception:
+            ym_rows = []
+        if ym_rows:
+            ts = evaluate_bars.__globals__["normalize_bars"](target_smt, as_of_ms)
+            ys = evaluate_bars.__globals__["normalize_bars"](ym_rows, as_of_ms)
+            target_state = evaluate_bars.__globals__["_swing_state"](ts, cfg)
+            ym_state = evaluate_bars.__globals__["_swing_state"](ys, cfg)
+            pair = evaluate_bars.__globals__["_target_smt"](
+                target,
+                "YM",
+                target_state,
+                ym_state,
+                cfg,
+            )
+            ctx["smt_ym"] = pair
+            ctx["symmetric_smt_ym"] = smt_trade_management.symmetric_smt({"smt": pair})
+        else:
+            ctx["smt_ym"] = {
+                "bias": "UNAVAILABLE",
+                "state": "UNAVAILABLE",
+                "reason": "YM history unavailable; NQ/ES SMT remains active",
+                "target": target,
+                "peer": "YM",
+            }
+            ctx["symmetric_smt_ym"] = {
+                "bias": "UNAVAILABLE",
+                "raw_bias": "UNAVAILABLE",
+                "state": "UNAVAILABLE",
+                "reason": "YM history unavailable",
+                "target": target,
+                "peer": "YM",
+            }
     return ctx
 
 
@@ -111,6 +156,7 @@ def flatten_context(ctx: dict[str, Any], market: str) -> dict[str, Any]:
     levels = (ctx.get("markets") or {}).get(market, {}) or {}
     smt = ctx.get("smt") or {}
     symmetric = ctx.get("symmetric_smt") or smt_trade_management.symmetric_smt(ctx)
+    symmetric_ym = ctx.get("symmetric_smt_ym") or {}
     return {
         "ctx_bias": ctx.get("bias"),
         "ctx_quality": ctx.get("quality"),
@@ -125,6 +171,9 @@ def flatten_context(ctx: dict[str, Any], market: str) -> dict[str, Any]:
         "ctx_smt_raw_bias": symmetric.get("raw_bias"),
         "ctx_smt_raw_sweeper": symmetric.get("raw_sweeper"),
         "ctx_smt_raw_holder": symmetric.get("raw_holder"),
+        "ctx_smt_ym_bias": symmetric_ym.get("bias"),
+        "ctx_smt_ym_raw_bias": symmetric_ym.get("raw_bias"),
+        "ctx_smt_ym_state": symmetric_ym.get("state"),
         "ctx_po3_bias": levels.get("po3_bias"),
         "ctx_po3_phase": levels.get("po3_phase"),
         "ctx_asia_high": levels.get("asia_high"),
@@ -194,6 +243,8 @@ def apply_candidate_filter(
         "SMT": (ctx.get("smt") or {}).get("bias"),
         "SMT_symmetric": symmetric.get("bias"),
         "SMT_raw": symmetric.get("raw_bias"),
+        "SMT_YM": (ctx.get("symmetric_smt_ym") or {}).get("bias"),
+        "SMT_YM_raw": (ctx.get("symmetric_smt_ym") or {}).get("raw_bias"),
         "PO3": ((ctx.get("markets") or {}).get(market, {}) or {}).get("po3_bias"),
         "PO3_phase": ((ctx.get("markets") or {}).get(market, {}) or {}).get("po3_phase"),
         "allowed": allowed,
