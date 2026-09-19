@@ -24,7 +24,7 @@ Primary source family:
 import re
 from typing import Any
 
-KNOWLEDGE_VERSION = "ict-core-knowledge-v1"
+KNOWLEDGE_VERSION = "ict-core-knowledge-v2"
 INDEX_SOURCE = (
     "https://info.quagmyre.com/xwiki/bin/view/Forex/The-Inner-Circle-Trader/"
     "ICT-2016-Premium-Mentorship-Core-Content-Lectures/"
