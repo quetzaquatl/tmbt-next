@@ -19,11 +19,13 @@ def payload() -> dict:
             rid: {"rule_id": rid, **rule}
             for rid, rule in ict_core_knowledge.RULE_CATALOG.items()
         },
+        "source_audit_status": ict_core_knowledge.VISUAL_AUDIT_GAPS,
         "executable_rules": ict_core_rules.CORE_RULES,
         "executable_to_knowledge": ict_core_rules.EXECUTABLE_TO_KNOWLEDGE,
         "non_core_assumptions": ict_core_rules.NON_CORE_ASSUMPTIONS,
         "guardrails": {
             "visual_rules_auto_execute": False,
+            "partial_rules_auto_execute": False,
             "reference_rules_auto_execute": False,
             "core_event_auto_creates_trade": False,
             "profitability_claim": False,
