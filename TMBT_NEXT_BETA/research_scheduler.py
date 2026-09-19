@@ -33,12 +33,12 @@ SCHEDULER_GENERATION = "source-audited-research-matrix-v3"
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
     "profiles": [
-        "NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1",
-        "ES_EBP_M15", "ES_EBP_M30", "ES_EBP_H1",
+        "NQ_EBP_H1", "ES_EBP_H1",
+        "XAU_OTE_BOS_M15", "XAU_SWEEP_IFVG_M5",
+        "NQ_SILVER_BULLET_M1", "ES_SILVER_BULLET_M1",
         "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
         "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
         "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
-        "XAU_OTE_BOS", "XAU_SWEEP_IFVG",
     ],
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
@@ -114,21 +114,9 @@ def load_config() -> dict[str, Any]:
         cfg["matrix_generation"] = MATRIX_GENERATION
 
     cfg["profiles"] = [str(x) for x in list(cfg.get("profiles") or [])]
-    # One-time expansion of the existing H1 EBP schedule to the explicitly
-    # requested M15/M30/H1 research matrix. Preserve any extra custom profiles.
-    expanded = []
-    for p in cfg["profiles"]:
-        if p == "NQ_EBP_H1":
-            for q in ("NQ_EBP_M15", "NQ_EBP_M30", "NQ_EBP_H1"):
-                if q not in expanded:
-                    expanded.append(q)
-        elif p == "ES_EBP_H1":
-            for q in ("ES_EBP_M15", "ES_EBP_M30", "ES_EBP_H1"):
-                if q not in expanded:
-                    expanded.append(q)
-        elif p not in expanded:
-            expanded.append(p)
-    cfg["profiles"] = expanded
+    # Keep canonical profiles stable. The EBP M15/M30 expansion belongs to the
+    # explicit experimental timeframe matrix, not to the canonical queue.
+    cfg["profiles"] = list(dict.fromkeys(cfg["profiles"]))
     if bool(cfg.get("ttfm_public_core_enabled", True)):
         ttfm_profiles = [
             "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
