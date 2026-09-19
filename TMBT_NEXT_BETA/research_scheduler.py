@@ -569,6 +569,13 @@ def _optimization_steps(report: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cycles: int) -> dict[str, Any]:
+    profile_id = str(report.get("profile") or "")
+    try:
+        profile_meta = (research_autopilot_bridge.profiles().get(profile_id) or {}) if profile_id else {}
+    except Exception:
+        profile_meta = {}
+    provenance = dict(profile_meta.get("provenance") or {})
+
     baseline = {}
     for stage in report.get("stages") or []:
         if isinstance(stage, dict) and stage.get("name") == "development_baseline":
@@ -638,6 +645,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
     return {
         "profile": report.get("profile"),
         "label": report.get("label"),
+        "provenance": provenance,
         "finished_at_utc": report.get("finished_at_utc"),
         "verdict": verdict,
         "candidate_state": candidate_state,
@@ -671,6 +679,13 @@ def _markdown(analysis: dict[str, Any]) -> str:
         f"- Verdict: **{analysis.get('verdict')}**",
         f"- State: **{analysis.get('candidate_state')}**",
         f"- Finished: {analysis.get('finished_at_utc') or '-'}",
+        "",
+        "## Quellenstatus",
+        f"- Source family: **{(analysis.get('provenance') or {}).get('source_family') or 'unclassified'}**",
+        f"- Source status: **{(analysis.get('provenance') or {}).get('source_status') or 'UNCLASSIFIED'}**",
+        f"- Evidence: **{(analysis.get('provenance') or {}).get('evidence_label') or (analysis.get('provenance') or {}).get('evidence_class') or 'D'}**",
+        f"- Core rules: {', '.join((analysis.get('provenance') or {}).get('core_rules') or []) or '-'}",
+        f"- Non-core/TMBT assumptions: {', '.join((analysis.get('provenance') or {}).get('non_core_assumptions') or []) or '-'}",
         "",
         "## Was gut lief",
     ]
