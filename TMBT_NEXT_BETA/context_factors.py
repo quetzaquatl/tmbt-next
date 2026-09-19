@@ -36,6 +36,9 @@ BACKTEST_FIELDS = [
     "ctx_smt_state",
     "ctx_smt_sweeper",
     "ctx_smt_holder",
+    "ctx_smt_ym_bias",
+    "ctx_smt_ym_raw_bias",
+    "ctx_smt_ym_state",
     "ctx_po3_bias",
     "ctx_po3_phase",
     "ctx_asia_high",
@@ -53,6 +56,13 @@ BACKTEST_FIELDS = [
     "ctx_index_or_complete",
     "ctx_index_am_active",
     "ctx_index_pm_active",
+    "ctx_ict_dealing_location",
+    "ctx_ict_equilibrium",
+    "ctx_ict_latest_fvg_side",
+    "ctx_ict_latest_fvg_ce",
+    "ctx_ict_latest_raid_side",
+    "ctx_ict_latest_raid_reference",
+    "ctx_ict_pipeline_version",
 ]
 
 
