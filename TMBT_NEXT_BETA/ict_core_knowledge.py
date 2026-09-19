@@ -492,11 +492,12 @@ RULE_CATALOG: dict[str, dict[str, Any]] = {
     },
     "CORE_OTE": {
         "concept": "OTE",
-        "summary": "Optimal Trade Entry is taught as a deep retracement concept inside a relevant price swing. Exact fib labels/zone boundaries are kept visually locked until the original chart/Fib presentation is source-faithfully certified.",
+        "summary": "Optimal Trade Entry is explicitly taught inside a relevant impulse swing as the deep retracement area using the 62%, 70.5% and 79% Fibonacci references; 70.5% is called the OTE sweet spot and 50% is equilibrium.",
         "lessons": [4, 5, 88, 115],
-        "evidence_class": "C",
-        "machine_status": "PARTIAL",
-        "note": "50% equilibrium is separately source-backed. Do not auto-execute 62/70.5/79 as canonical Core constants while the visual audit remains open.",
+        "evidence_class": "A",
+        "machine_status": "READY",
+        "source_detail": "M1 L4 00:24:09-00:24:22 and 00:29:19-00:29:45 explicitly name 62%, 70.5% and 79%; M1 L5 00:11:25-00:11:47 calls 70.5% the OTE sweet spot.",
+        "note": "The percentages are source-certified. Selecting the active impulse/dealing range remains contextual and is not implied by the percentages themselves.",
     },
     "CORE_LIQUIDITY_OLD_HIGHS_LOWS": {
         "concept": "liquidity",
@@ -604,11 +605,12 @@ RULE_CATALOG: dict[str, dict[str, Any]] = {
     },
     "CORE_FAIR_VALUE_GAP": {
         "concept": "FVG",
-        "summary": "A Fair Value Gap is taught as a multi-candle one-sided delivery imbalance around displacement. The three-candle concept is source-supported, but exact wick/body boundary geometry remains visually locked until certified against the original chart presentation.",
+        "summary": "Lesson 36 explicitly defines the three-candle one-sided delivery pocket by the untraded range between the low/high of the candle before the displacement candle and the high/low of the candle after it; bullish geometry is the mirrored case.",
         "lessons": [36, 41, 95, 115],
-        "evidence_class": "C",
-        "machine_status": "PARTIAL",
-        "note": "TMBT may measure a three-candle wick-gap candidate for research, but must not label that exact geometry as fully source-certified Core while the visual audit is open.",
+        "evidence_class": "A",
+        "machine_status": "READY",
+        "source_detail": "M4 L36 00:01:44-00:06:24, especially 00:03:29-00:04:54 and 00:05:48-00:06:24.",
+        "note": "The gap geometry is source-certified. Touch/full traversal can be measured, but model-specific mitigation, inversion and expiry rules remain separate.",
     },
     "CORE_EQUAL_HIGHS_LOWS_LIQUIDITY": {
         "concept": "equal_highs_lows",
@@ -1027,10 +1029,12 @@ RULE_CATALOG.update({
     },
     "CORE_INTRADAY_PROFILE": {
         "concept": "intraday_profile",
-        "summary": "Intraday profiles classify likely day structure from pre-New-York range, CBDR/midnight context and session delivery.",
+        "summary": "Lesson 77 explicitly defines conditional London intraday profiles from higher-timeframe bias, CBDR/Asian-range characteristics, midnight-to-2am protraction and 2am delayed-protraction alternatives. The profiles are similarity templates with stated deviations, not exact deterministic copies.",
         "lessons": [77, 84, 85, 95, 96, 97, 99, 100, 101],
-        "evidence_class": "C",
+        "evidence_class": "A",
         "machine_status": "REFERENCE",
+        "source_detail": "M8 L77 00:00:33-00:20:11; normal sell profile criteria 00:01:27-00:07:25, delayed sell 00:08:09-00:10:59, mirrored buy profiles 00:11:21-00:20:11.",
+        "note": "The numeric CBDR/Asian ranges are FX-specific. Do not transplant pip thresholds to futures.",
     },
     "CORE_DAYTRADE_HTF_ALIGNMENT": {
         "concept": "daytrade_alignment",
@@ -1048,24 +1052,30 @@ RULE_CATALOG.update({
     },
     "CORE_ZERO_GMT_PIVOT_CONTEXT": {
         "concept": "zero_gmt",
-        "summary": "Zero-GMT/session pivots are intraday time references used with Asian range and daily-range projections to frame expected delivery.",
+        "summary": "Lesson 82 explicitly uses zero-GMT floor-trader pivots as liquidity/number-filling references: central pivot, R/S levels and their 50% midpoint levels are interpreted in the direction of institutional order flow and the PD-array bias rather than as standalone retail buy/sell signals.",
         "lessons": [82],
-        "evidence_class": "C",
+        "evidence_class": "A",
         "machine_status": "REFERENCE",
+        "source_detail": "M9 L82 00:01:46-00:05:38 defines zero-GMT central/R/S pivots and midpoint levels; later examples combine them with Asian range and PD-array bias.",
+        "note": "This is a contextual reference framework. Exact platform pivot calculation must match the source's zero-GMT convention before software use.",
     },
     "CORE_ASIAN_SCALP_MODEL": {
         "concept": "asian_scalp",
-        "summary": "The short FX scalp example uses Asian-session range and short-term extremes; pip targets and exact execution are market-specific and should not be ported to futures.",
+        "summary": "Lesson 83 explicitly gives an FX Asian-session scalp: through midnight New York, use a 5-minute chart, probe a prior New-York short-term low for a long or short-term high for a short, fade the liquidity run, and use a fixed 20-pip target/stop in the lesson's model.",
         "lessons": [83],
-        "evidence_class": "C",
+        "evidence_class": "A",
         "machine_status": "REFERENCE",
+        "source_detail": "M9 L83 00:04:13-00:06:25 core long/short setup; 00:08:23-00:09:23 short example; 00:10:56-00:11:27 long example.",
+        "note": "This is explicitly an FX/pip model and must not be ported to NQ/ES/GC by replacing pips with arbitrary ticks.",
     },
     "CORE_BREAD_AND_BUTTER_DAYTRADE": {
         "concept": "bread_and_butter",
-        "summary": "Bullish/bearish bread-and-butter templates combine directional repricing, London/Judas behavior, time of day and range-aware objectives.",
+        "summary": "Lessons 86-87 explicitly define mirrored bread-and-butter buy/sell families: higher-timeframe institutional order flow first, then offset accumulation/distribution or fair-value retracement at discount/premium arrays, with session/kill-zone timing and Judas-style repricing used to refine intraday entries.",
         "lessons": [86, 87],
-        "evidence_class": "C",
+        "evidence_class": "A",
         "machine_status": "REFERENCE",
+        "source_detail": "M9 L86 00:00:31-00:08:42 and later session examples; M9 L87 00:00:24-00:03:59 states the sell-side mirror and confirms parameters are reversed from the buy lesson.",
+        "note": "This is a family of contextual intraday templates, not one universal deterministic setup. FX-specific timing/targets remain scoped to the lesson.",
     },
     "CORE_DAYTRADE_ROUTINE": {
         "concept": "daytrade_routine",
@@ -1083,17 +1093,21 @@ RULE_CATALOG.update({
     },
     "CORE_BOND_OPENING_RANGE": {
         "concept": "bond_opening_range",
-        "summary": "Bond analysis uses an opening-range framework plus relative/volume behavior to classify the session before selecting a setup.",
+        "summary": "Lesson 94 explicitly defines the 30-year Treasury-bond futures true day as 08:00-15:00 New York and its opening range as 08:00-09:00; the opening range frequently frames a day high/low, stop run or fair-value/PD-array setup.",
         "lessons": [94],
-        "evidence_class": "C",
+        "evidence_class": "A",
         "machine_status": "REFERENCE",
+        "source_detail": "M10 L94 00:03:05-00:04:09.",
+        "note": "Bond-specific ZB framework. Do not transfer its opening-range clock to equity index futures.",
     },
     "CORE_BOND_SPLIT_SESSION": {
         "concept": "bond_split_session",
-        "summary": "Bond sessions are split into AM/PM structures so continuation and reversal expectations are conditioned on the completed first session.",
+        "summary": "Lesson 95 explicitly splits the Treasury-bond day into an AM session/morning trend from 08:00-noon New York and a PM session from noon-15:00, with the completed AM range used to judge whether the PM session is likely to continue, reverse, abbreviate or be skipped.",
         "lessons": [95],
-        "evidence_class": "C",
+        "evidence_class": "A",
         "machine_status": "REFERENCE",
+        "source_detail": "M10 L95 00:05:05-00:07:31 session definitions; 00:08:36-00:09:30 PM-abbreviation rule; 00:10:24-00:11:12 worked PM example.",
+        "note": "Bond-specific session logic; not interchangeable with the Month-10 equity-index AM/PM clocks.",
     },
     "CORE_BOND_DAY_TYPE": {
         "concept": "bond_day_type",
@@ -1127,8 +1141,8 @@ RULE_CATALOG.update({
 
 
 VISUAL_AUDIT_GAPS: dict[str, dict[str, Any]] = {
-    "CORE_OTE": {"lessons": [4, 5, 88, 115], "status": "LOCKED", "gap": "Exact OTE Fib labels/zone boundaries require visual certification."},
-    "CORE_FAIR_VALUE_GAP": {"lessons": [36, 41, 95, 115], "status": "LOCKED", "gap": "Exact wick/body boundary geometry requires visual certification."},
+    "CORE_OTE": {"lessons": [4, 5, 88, 115], "status": "TEXT_CERTIFIED_NUMERIC", "gap": "No unresolved numeric source gap; active impulse/dealing-range selection remains contextual."},
+    "CORE_FAIR_VALUE_GAP": {"lessons": [36, 41, 95, 115], "status": "TEXT_CERTIFIED_GEOMETRY", "gap": "No unresolved FVG boundary gap; inversion/expiry/mitigation rules remain model-specific."},
     "CORE_ORDER_BLOCK": {"lessons": [27], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Candidate and validation are text-certified; contextual support/resistance and search-window selection remain non-canonical."},
     "CORE_MITIGATION_BLOCK": {"lessons": [28, 68], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Structure-shift sequence is text-certified; swing segmentation remains contextual."},
     "CORE_BREAKER_BLOCK": {"lessons": [29, 43, 52, 88, 115], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Breaker sequence is text-certified; swing/reference quantification remains contextual."},
@@ -1141,12 +1155,12 @@ VISUAL_AUDIT_GAPS: dict[str, dict[str, Any]] = {
     "CORE_WEEKLY_PROFILE_CONTEXT": {"lessons": [65, 66, 67, 71, 72, 73, 88], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Conditional weekly profiles are text-certified; deterministic weekday conversion remains prohibited."},
     "CORE_WEEKLY_MANIPULATION_TEMPLATES": {"lessons": [66, 67, 71], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Template families and prerequisites are text-certified; activation remains context-dependent."},
     "CORE_ONE_SHOT_ONE_KILL": {"lessons": [72], "status": "TEXT_CERTIFIED_REFERENCE", "gap": "Procedure prerequisites are text-certified; the complete setup depends on broader mentorship/free-tutorial knowledge and discretion."},
-    "CORE_INTRADAY_PROFILE": {"lessons": [77, 84, 85, 95, 96, 97, 99, 100, 101], "status": "LOCKED", "gap": "Profile classification depends on pre-session structure and context."},
-    "CORE_ZERO_GMT_PIVOT_CONTEXT": {"lessons": [82], "status": "LOCKED", "gap": "Exact pivot/range construction requires source-visual verification."},
-    "CORE_ASIAN_SCALP_MODEL": {"lessons": [83], "status": "LOCKED", "gap": "FX-specific execution geometry is not portable to futures and remains visual/model-specific."},
-    "CORE_BREAD_AND_BUTTER_DAYTRADE": {"lessons": [86, 87], "status": "LOCKED", "gap": "Full Judas/repricing/time-and-price geometry remains chart-dependent."},
-    "CORE_BOND_OPENING_RANGE": {"lessons": [94], "status": "LOCKED", "gap": "Bond-specific range/volume geometry requires source-visual verification."},
-    "CORE_BOND_SPLIT_SESSION": {"lessons": [95], "status": "LOCKED", "gap": "Bond AM/PM reversal geometry remains model-specific/visual."},
+    "CORE_INTRADAY_PROFILE": {"lessons": [77, 84, 85, 95, 96, 97, 99, 100, 101], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Profile families and stated criteria are text-certified; activation remains context-dependent."},
+    "CORE_ZERO_GMT_PIVOT_CONTEXT": {"lessons": [82], "status": "TEXT_CERTIFIED_REFERENCE", "gap": "Pivot hierarchy and zero-GMT convention are text-certified; exact platform calculation must match that convention."},
+    "CORE_ASIAN_SCALP_MODEL": {"lessons": [83], "status": "TEXT_CERTIFIED_FX_MODEL", "gap": "FX model is text-certified; portability to futures is explicitly prohibited."},
+    "CORE_BREAD_AND_BUTTER_DAYTRADE": {"lessons": [86, 87], "status": "TEXT_CERTIFIED_CONTEXTUAL", "gap": "Buy/sell template families are text-certified; model activation remains context-dependent."},
+    "CORE_BOND_OPENING_RANGE": {"lessons": [94], "status": "TEXT_CERTIFIED_BOND_RULE", "gap": "Bond opening-range clock and role are text-certified; remains ZB-specific."},
+    "CORE_BOND_SPLIT_SESSION": {"lessons": [95], "status": "TEXT_CERTIFIED_BOND_RULE", "gap": "Bond AM/PM clocks and conditional use are text-certified; remains bond-specific."},
 }
 
 
@@ -1254,12 +1268,13 @@ def coverage_report() -> dict[str, Any]:
         rid for rid, item in VISUAL_AUDIT_GAPS.items()
         if str(item.get("status") or "").upper() == "LOCKED"
     )
-    visual_certification_complete = not visual_locked
+    source_rule_audit_complete = not visual_locked
     return {
         "knowledge_version": KNOWLEDGE_VERSION,
         "structured_knowledge_complete": structured_complete,
-        "visual_certification_complete": visual_certification_complete,
-        "fully_source_certified": bool(structured_complete and visual_certification_complete),
+        "source_rule_audit_complete": source_rule_audit_complete,
+        "fully_rule_audited": bool(structured_complete and source_rule_audit_complete),
+        "frame_by_frame_visual_audit_complete": False,
         "visual_locked_rule_count": len(visual_locked),
         "visual_locked_rules": visual_locked,
         "lecture_count": len(LECTURES),
@@ -1284,14 +1299,15 @@ def coverage_report() -> dict[str, Any]:
             "knowledge_rule_catalog": "COMPLETE" if not unmapped_lessons else "PARTIAL",
             "structured_knowledge_base": "COMPLETE" if structured_complete else "PARTIAL",
             "transcript_rule_promotion": "PARTIAL_BY_DESIGN",
-            "visual_geometry_audit": "COMPLETE" if visual_certification_complete else "IN_PROGRESS_LOCKED",
-            "full_source_certification": "COMPLETE" if structured_complete and visual_certification_complete else "IN_PROGRESS",
+            "source_rule_audit": "COMPLETE" if source_rule_audit_complete else "IN_PROGRESS_LOCKED",
+            "frame_by_frame_visual_audit": "NOT_CLAIMED",
+            "full_rule_audit": "COMPLETE" if structured_complete and source_rule_audit_complete else "IN_PROGRESS",
             "profitability_validation": "SEPARATE_TMBT_RESEARCH",
         },
         "important_limit": (
-            "Structured knowledge coverage is complete at lesson/concept level. "
-            "This does not claim sentence-by-sentence transcript reproduction or "
-            "frame-by-frame chart verification. C/VISUAL rules remain locked until "
-            "source-faithful visual confirmation."
+            "Structured knowledge and rule-source coverage are complete at the audited concept/rule level. "
+            "This does not claim sentence-by-sentence transcript reproduction or a manual frame-by-frame viewing "
+            "of all 53+ hours. Contextual/reference rules stay non-executable unless a separate deterministic "
+            "READY rule and execution contract exist."
         ),
     }
