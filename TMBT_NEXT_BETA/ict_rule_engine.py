@@ -209,7 +209,9 @@ def fair_value_gaps(bars: list[Bar]) -> list[dict[str, Any]]:
                 "fully_traversed_after_creation": fully_traversed,
                 "first_full_traversal_ms": first_full_ms,
                 "rule_id": "ICT_CORE_FVG_3_CANDLE",
-                "evidence_class": "B",
+                "evidence_class": "C",
+                "geometry_status": "RESEARCH_CANDIDATE_VISUAL_LOCKED",
+                "execution_usable": False,
                 "validity_claim": "NONE",
             }
         )
@@ -293,16 +295,6 @@ def _latest_dealing_range(
     else:
         location = "EQUILIBRIUM"
 
-    rng = high - low
-    if direction == "BULLISH":
-        ote_62 = high - 0.62 * rng
-        ote_705 = high - 0.705 * rng
-        ote_79 = high - 0.79 * rng
-    else:
-        ote_62 = low + 0.62 * rng
-        ote_705 = low + 0.705 * rng
-        ote_79 = low + 0.79 * rng
-
     return {
         "available": True,
         "low": low,
@@ -312,27 +304,32 @@ def _latest_dealing_range(
         "location": location,
         "impulse_direction": direction,
         "ote_zone": {
-            "p62": ote_62,
-            "p70_5": ote_705,
-            "p79": ote_79,
-            "low": min(ote_62, ote_79),
-            "high": max(ote_62, ote_79),
+            "available": False,
+            "status": "VISUAL_SOURCE_AUDIT_LOCKED",
+            "reason": "Exact OTE Fib labels/zone boundaries are not exposed as deterministic Core geometry until visual certification is complete.",
         },
         "source_rules": ["ICT_CORE_OTE_ZONE"],
         "range_selection_evidence_class": "D",
-        "note": "Percentages are Core-sourced; latest-opposite-swing range selection is a TMBT convention.",
+        "equilibrium_evidence_class": "A",
+        "ote_geometry_evidence_class": "C",
+        "note": "50% equilibrium is source-backed; latest-opposite-swing range selection is TMBT and exact OTE geometry remains visually locked.",
     }
 
 
 def profile_pipeline_contract(profile_id: str) -> dict[str, Any]:
     prov = ict_core_rules.expanded_provenance(profile_id)
     non_core = list(prov.get("non_core_assumptions") or [])
+    core_rules = list(prov.get("core_rules") or [])
+    safe_rules = ict_core_rules.production_safe_core_rules(core_rules)
+    locked_rules = [rid for rid in core_rules if rid not in safe_rules]
     return {
         "pipeline_version": PIPELINE_VERSION,
         "profile_id": profile_id,
         "context": {
             "status": "SOURCE_AWARE",
-            "core_rules": list(prov.get("core_rules") or []),
+            "core_rules": core_rules,
+            "production_safe_core_rules": safe_rules,
+            "locked_core_rules": locked_rules,
         },
         "event": {
             "status": "SOURCE_AWARE",
@@ -441,7 +438,9 @@ def snapshot(
         "audit": {
             "closed_candles_only": True,
             "pivot_geometry_evidence_class": "D",
-            "fvg_geometry_evidence_class": "B",
+            "fvg_geometry_evidence_class": "C",
+            "fvg_geometry_locked": True,
+            "ote_geometry_locked": True,
             "liquidity_reference_evidence_class": "A",
             "profitability_claim": False,
         },
