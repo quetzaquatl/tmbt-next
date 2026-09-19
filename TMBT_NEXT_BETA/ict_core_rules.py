@@ -297,9 +297,61 @@ def profile_provenance(profile_id: str) -> dict[str, Any]:
     )
 
 
+def profile_variant_metadata(profile_id: str) -> dict[str, Any]:
+    """Separate original/formalized profiles from generated timeframe clones."""
+    p = str(profile_id or "").upper()
+
+    canonical = {
+        "NQ_EBP_H1": ("H1", "formalized TMBT EBP timeframe"),
+        "ES_EBP_H1": ("H1", "formalized TMBT EBP timeframe"),
+        "XAU_OTE_BOS_M15": ("M15", "audited migrated OTE baseline"),
+        "XAU_SWEEP_IFVG_M5": ("M5", "migrated London Sweep iFVG baseline"),
+        "NQ_SILVER_BULLET_M1": ("M1", "migrated Silver Bullet baseline mapped to NQ futures"),
+        "ES_SILVER_BULLET_M1": ("M1", "migrated Silver Bullet baseline mapped to ES futures"),
+    }
+    if p in canonical:
+        tf, note = canonical[p]
+        return {
+            "variant_status": "CANONICAL_FORMALIZED",
+            "canonical_timeframe": tf,
+            "generated_timeframe_variant": False,
+            "variant_note": note,
+        }
+
+    if "_TTFM_" in p:
+        return {
+            "variant_status": "DOCUMENTED_PUBLIC_MODEL_VARIANT",
+            "canonical_timeframe": None,
+            "generated_timeframe_variant": False,
+            "variant_note": "Explicit public TTrades playbook mapping; exact TMBT mechanics remain implementation conventions.",
+        }
+
+    generated_prefixes = (
+        "NQ_EBP_", "ES_EBP_",
+        "XAU_OTE_BOS_", "GC_OTE_BOS_",
+        "XAU_SWEEP_IFVG_", "GC_SWEEP_IFVG_",
+        "NQ_SILVER_BULLET_", "ES_SILVER_BULLET_",
+    )
+    if any(p.startswith(x) for x in generated_prefixes):
+        return {
+            "variant_status": "GENERATED_RESEARCH_VARIANT",
+            "canonical_timeframe": None,
+            "generated_timeframe_variant": True,
+            "variant_note": "Generated for discovery; not a separately sourced/canonical strategy definition.",
+        }
+
+    return {
+        "variant_status": "UNCLASSIFIED",
+        "canonical_timeframe": None,
+        "generated_timeframe_variant": False,
+        "variant_note": "",
+    }
+
+
 def expanded_provenance(profile_id: str) -> dict[str, Any]:
     """Return profile provenance plus the referenced rule definitions."""
     p = profile_provenance(profile_id)
+    p.update(profile_variant_metadata(profile_id))
     p["core_rule_details"] = {
         rid: deepcopy(CORE_RULES[rid])
         for rid in p.get("core_rules") or []
