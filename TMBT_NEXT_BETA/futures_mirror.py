@@ -138,7 +138,7 @@ def _aggregate(bars, minutes: int):
 
 def query(workspace: Path, market: str, tf: str, limit: int = 500):
     market = str(market).upper()
-    if market not in {"NQ", "ES", "GC"}:
+    if market not in {"NQ", "ES", "YM", "GC"}:
         return None
     ntf = _tf(tf)
 
