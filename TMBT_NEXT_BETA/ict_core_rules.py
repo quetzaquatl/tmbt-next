@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+import ict_core_knowledge
+
 # Source-aware rule registry for TMBT.
 #
 # Evidence classes:
@@ -19,6 +21,17 @@ EVIDENCE_CLASSES = {
     "B": "DERIVED_CORE",
     "C": "VISUAL_CONFIRMATION_REQUIRED",
     "D": "TMBT_RESEARCH_OR_LATER_ICT",
+}
+
+EXECUTABLE_TO_KNOWLEDGE = {
+    "ICT_CORE_OTE_ZONE": "CORE_OTE",
+    "ICT_CORE_FVG_3_CANDLE": "CORE_FAIR_VALUE_GAP",
+    "ICT_CORE_LIQUIDITY_OLD_EXTREMES": "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
+    "ICT_CORE_ORDER_BLOCK": "CORE_ORDER_BLOCK",
+    "ICT_CORE_INDEX_OPENING_RANGE": "CORE_INDEX_OPENING_RANGE",
+    "ICT_CORE_INDEX_AM_SESSION": "CORE_INDEX_AM_RELATIVE_HILO",
+    "ICT_CORE_INDEX_SMT": "CORE_INDEX_SMT_BASKET",
+    "ICT_CORE_MULTI_TF_PORTABILITY": "CORE_TIMEFRAME_HIERARCHY",
 }
 
 CORE_RULES: dict[str, dict[str, Any]] = {
@@ -349,14 +362,34 @@ def profile_variant_metadata(profile_id: str) -> dict[str, Any]:
     }
 
 
+def knowledge_coverage() -> dict[str, Any]:
+    """Expose the full Core knowledge-base audit separately from executable rules."""
+    coverage = dict(ict_core_knowledge.coverage_report())
+    coverage["executable_rule_count"] = len(CORE_RULES)
+    coverage["knowledge_linked_executable_rules"] = sum(
+        1 for rid in CORE_RULES if rid in EXECUTABLE_TO_KNOWLEDGE
+    )
+    coverage["knowledge_version"] = ict_core_knowledge.KNOWLEDGE_VERSION
+    return coverage
+
+
 def expanded_provenance(profile_id: str) -> dict[str, Any]:
-    """Return profile provenance plus the referenced rule definitions."""
+    """Return profile provenance plus referenced executable + knowledge rules."""
     p = profile_provenance(profile_id)
     p.update(profile_variant_metadata(profile_id))
+    p["knowledge_version"] = ict_core_knowledge.KNOWLEDGE_VERSION
     p["core_rule_details"] = {
         rid: deepcopy(CORE_RULES[rid])
         for rid in p.get("core_rules") or []
         if rid in CORE_RULES
+    }
+    p["knowledge_rule_details"] = {
+        EXECUTABLE_TO_KNOWLEDGE[rid]: deepcopy(
+            ict_core_knowledge.RULE_CATALOG[EXECUTABLE_TO_KNOWLEDGE[rid]]
+        )
+        for rid in p.get("core_rules") or []
+        if rid in EXECUTABLE_TO_KNOWLEDGE
+        and EXECUTABLE_TO_KNOWLEDGE[rid] in ict_core_knowledge.RULE_CATALOG
     }
     p["non_core_details"] = {
         rid: deepcopy(NON_CORE_ASSUMPTIONS[rid])
