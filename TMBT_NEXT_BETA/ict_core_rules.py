@@ -422,16 +422,16 @@ def core_rule_gate(rule_id: str) -> dict[str, Any]:
     rule = CORE_RULES.get(rid) or {}
     knowledge_id = EXECUTABLE_TO_KNOWLEDGE.get(rid)
     knowledge = ict_core_knowledge.RULE_CATALOG.get(knowledge_id or "") or {}
-    visual_gap = ict_core_knowledge.VISUAL_AUDIT_GAPS.get(knowledge_id or "")
-    visual_locked = bool(
-        visual_gap and str(visual_gap.get("status") or "").upper() == "LOCKED"
+    audit_item = ict_core_knowledge.SOURCE_AUDIT_STATUS.get(knowledge_id or "")
+    source_locked = bool(
+        audit_item and str(audit_item.get("status") or "").upper() == "LOCKED"
     )
     evidence = str(rule.get("evidence_class") or "")
     machine_status = str(knowledge.get("machine_status") or "")
     executable = bool(
         rule
         and evidence in {"A", "B"}
-        and not visual_locked
+        and not source_locked
         and machine_status == "READY"
     )
     return {
@@ -439,8 +439,11 @@ def core_rule_gate(rule_id: str) -> dict[str, Any]:
         "knowledge_rule_id": knowledge_id,
         "evidence_class": evidence or None,
         "machine_status": knowledge.get("machine_status"),
-        "visual_audit_status": (visual_gap or {}).get("status"),
-        "visual_locked": visual_locked,
+        "source_audit_status": (audit_item or {}).get("status"),
+        "source_locked": source_locked,
+        # Compatibility keys for existing UI/API clients.
+        "visual_audit_status": (audit_item or {}).get("status"),
+        "visual_locked": source_locked,
         "execution_allowed": executable,
         "reason": (
             "source-certified deterministic primitive"
