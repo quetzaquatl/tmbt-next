@@ -177,15 +177,12 @@ def activate() -> dict[str, Any]:
         news = bt_core._filter_news(news_df if news_df is not None else pd.DataFrame(), cfg)
         dates = list(pd.date_range(start_date, end_date, freq="D").date)
         total = len(dates)
-        configured = int(os.environ.get("TMBT_EBP_WORKERS", "0") or 0)
-        if configured > 0:
-            workers = configured
-        else:
-            # Conservative default for a desktop that is also running the UI,
-            # scheduler and sync. Users can override with TMBT_EBP_WORKERS.
-            logical = max(1, int(os.cpu_count() or 1))
-            workers = max(1, min(4, logical // 2 if logical > 2 else 1))
-        workers = max(1, min(8, workers))
+        configured = int(os.environ.get("TMBT_EBP_WORKERS", "1") or 1)
+        # Thread-level day parallelism is opt-in only. On the current Windows
+        # EBP workload it benchmarks slower (Python/Pandas GIL + SQLite/read
+        # contention + small per-day tasks). Production therefore stays serial
+        # until optimizer-combo process parallelism is available.
+        workers = max(1, min(8, configured))
 
         def _run_day(d: date):
             if d.weekday() not in cfg.weekdays:
