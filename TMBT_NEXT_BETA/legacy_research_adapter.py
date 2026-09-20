@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from concurrent.futures import ThreadPoolExecutor
 import json
 import zipfile
 import math
@@ -160,39 +161,44 @@ def activate() -> dict[str, Any]:
     original_load_cached = bt_core._load_cached_utc_date
 
     def backtest_ebp_multitimeframe(file_index, cache_root: Path, cfg, start_date: date, end_date: date, news_df=None, progress_cb=None):
-        """Run the already-formalized EBP model on 15m, 30m, or 1H bars.
+        """Run the formalized EBP model with deterministic day-level parallelism.
 
-        Signal logic is unchanged. The only intentional extension is timeframe:
-        signal confirmation, previous-bar liquidity, and entry-valid duration are
-        expressed in the selected signal timeframe.
+        Each local trading day is independent for this model: max-trades-per-day
+        and last-exit state reset at the day boundary. We therefore parallelize
+        days *inside* each optimizer combination instead of running multiple
+        research_jobs concurrently. This preserves the existing single job/status
+        writer while using several CPU cores for the expensive historical scan.
         """
         tf = str(cfg.signal_tf)
         tf_minutes = int(bt_core.TF_MINUTES.get(tf, 0) or 0)
         if tf not in {"15m", "30m", "1H"} or tf_minutes <= 0:
             return pd.DataFrame()
-        news = bt_core._filter_news(news_df if news_df is not None else pd.DataFrame(), cfg)
-        trades = []
-        dates = pd.date_range(start_date, end_date, freq="D").date
-        total = len(dates)
 
-        for di, d in enumerate(dates, 1):
+        news = bt_core._filter_news(news_df if news_df is not None else pd.DataFrame(), cfg)
+        dates = list(pd.date_range(start_date, end_date, freq="D").date)
+        total = len(dates)
+        configured = int(os.environ.get("TMBT_EBP_WORKERS", "0") or 0)
+        if configured > 0:
+            workers = configured
+        else:
+            # Conservative default for a desktop that is also running the UI,
+            # scheduler and sync. Users can override with TMBT_EBP_WORKERS.
+            logical = max(1, int(os.cpu_count() or 1))
+            workers = max(1, min(4, logical // 2 if logical > 2 else 1))
+        workers = max(1, min(8, workers))
+
+        def _run_day(d: date):
             if d.weekday() not in cfg.weekdays:
-                if progress_cb:
-                    progress_cb(di, total, d, len(trades))
-                continue
+                return d, []
             day = bt_core.load_local_day_1m(file_index, cache_root, cfg.market, d, cfg.calendar_tz)
             if day.empty:
-                if progress_cb:
-                    progress_cb(di, total, d, len(trades))
-                continue
+                return d, []
             _prev_d, prev = bt_core._find_prev_nonempty_day(file_index, cache_root, cfg.market, d, cfg.calendar_tz)
             warm_bars = max(180, int(180 * 60 / tf_minutes))
             warm = pd.concat([prev.tail(warm_bars) if not prev.empty else prev, day]).sort_index()
             sig = bt_core._apply_indicators(bt_core._aggregate_1m(warm, tf, cfg.calendar_tz), cfg)
             if len(sig) < 2:
-                if progress_cb:
-                    progress_cb(di, total, d, len(trades))
-                continue
+                return d, []
 
             sess_start, sess_end = bt_core._session_bounds(d, cfg.session_start, cfg.session_end, cfg.session_tz)
             candidates = []
@@ -211,6 +217,7 @@ def activate() -> dict[str, Any]:
                 setup.update({"signal_i": i, "signal_open_time": signal_open, "signal_close_time": signal_close})
                 candidates.append(setup)
 
+            day_trades = []
             count = 0
             last_exit = pd.Timestamp.min.tz_localize("UTC")
             for setup in candidates:
@@ -268,11 +275,28 @@ def activate() -> dict[str, Any]:
                         ),
                     },
                 )
-                trades.append(rec)
+                day_trades.append(rec)
                 last_exit = pd.Timestamp(result["exit_time"])
                 count += 1
-            if progress_cb:
-                progress_cb(di, total, d, len(trades))
+            return d, day_trades
+
+        trades = []
+        if workers <= 1 or total < 30:
+            iterator = map(_run_day, dates)
+        else:
+            pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="tmbt-ebp")
+            iterator = pool.map(_run_day, dates)
+
+        try:
+            for di, (d, day_trades) in enumerate(iterator, 1):
+                if day_trades:
+                    trades.extend(day_trades)
+                if progress_cb:
+                    progress_cb(di, total, d, len(trades))
+        finally:
+            if workers > 1 and total >= 30:
+                pool.shutdown(wait=True, cancel_futures=False)
+
         return pd.DataFrame(trades).sort_values("entry_time").reset_index(drop=True) if trades else pd.DataFrame()
 
     bt_core._backtest_ebp_h1_indices = backtest_ebp_multitimeframe
