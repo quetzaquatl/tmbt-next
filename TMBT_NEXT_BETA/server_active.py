@@ -215,7 +215,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.63-beta-parallel-research"
+core.APP_VERSION = "0.9.64-beta-optimizer-safe"
 
 
 class Handler(ready.Handler):
