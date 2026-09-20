@@ -215,7 +215,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.62-beta-ict-core-audit-complete"
+core.APP_VERSION = "0.9.63-beta-parallel-research"
 
 
 class Handler(ready.Handler):
