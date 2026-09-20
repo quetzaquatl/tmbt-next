@@ -7,7 +7,7 @@ set "TMBT_NEXT_PORT=8510"
 
 echo.
 echo =========================================
-echo TMBT NEXT BETA 0.9.63 PARALLEL RESEARCH
+echo TMBT NEXT BETA 0.9.64 OPTIMIZER SAFE
 echo =========================================
 echo Workspace: %TMBT_WORKSPACE%
 echo URL: http://127.0.0.1:%TMBT_NEXT_PORT%
