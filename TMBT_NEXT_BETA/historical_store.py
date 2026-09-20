@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,45 @@ TF = {
     "30m": ("bars_30m", 30 * 60_000),
     "1h": ("bars_1h", 60 * 60_000),
 }
+
+_LOCAL = threading.local()
+
+
+def _ro_connection(path: Path) -> sqlite3.Connection:
+    """Keep one read-only SQLite connection per worker thread.
+
+    Optimizers request thousands of trading days. Opening/closing SQLite for
+    every day creates avoidable overhead. A thread-local read-only connection
+    is safe for the EBP worker pool and lets SQLite retain its page cache.
+    """
+    p = Path(path).resolve()
+    key = str(p)
+    con = getattr(_LOCAL, "connection", None)
+    old_key = getattr(_LOCAL, "connection_path", None)
+    if con is not None and old_key == key:
+        return con
+    if con is not None:
+        try:
+            con.close()
+        except Exception:
+            pass
+    con = sqlite3.connect(
+        f"file:{p.as_posix()}?mode=ro",
+        uri=True,
+        timeout=30.0,
+        check_same_thread=True,
+    )
+    try:
+        con.execute("PRAGMA query_only=ON")
+        con.execute("PRAGMA temp_store=MEMORY")
+        con.execute("PRAGMA cache_size=-100000")
+        con.execute("PRAGMA mmap_size=268435456")
+    except Exception:
+        pass
+    _LOCAL.connection = con
+    _LOCAL.connection_path = key
+    return con
+
 
 
 def _workspace() -> Path:
@@ -65,20 +105,17 @@ def load_bars(
 
     cutoff_open_ms = int(as_of_ms) - width_ms
     lim = max(1, int(limit))
-    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
-    try:
-        rows = con.execute(
-            f"""
-            SELECT t, symbol, o, h, l, c, v
-            FROM {table}
-            WHERE root=? AND t<=?
-            ORDER BY t DESC
-            LIMIT ?
-            """,
-            (root, cutoff_open_ms, lim),
-        ).fetchall()
-    finally:
-        con.close()
+    con = _ro_connection(p)
+    rows = con.execute(
+        f"""
+        SELECT t, symbol, o, h, l, c, v
+        FROM {table}
+        WHERE root=? AND t<=?
+        ORDER BY t DESC
+        LIMIT ?
+        """,
+        (root, cutoff_open_ms, lim),
+    ).fetchall()
     rows.reverse()
     return [
         {
@@ -135,19 +172,16 @@ def available_dates(market: str, *, workspace: Path | None = None, path: Path | 
     p = (path or db_path(workspace)).resolve()
     if not p.exists():
         return []
-    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
-    try:
-        rows = con.execute(
-            """
-            SELECT DISTINCT strftime('%Y-%m-%d', t / 1000, 'unixepoch')
-            FROM bars_1m
-            WHERE root=?
-            ORDER BY 1
-            """,
-            (root,),
-        ).fetchall()
-    finally:
-        con.close()
+    con = _ro_connection(p)
+    rows = con.execute(
+        """
+        SELECT DISTINCT strftime('%Y-%m-%d', t / 1000, 'unixepoch')
+        FROM bars_1m
+        WHERE root=?
+        ORDER BY 1
+        """,
+        (root,),
+    ).fetchall()
     out = []
     for (ds,) in rows:
         try:
@@ -177,19 +211,16 @@ def load_utc_day_1m(
     p = (path or db_path(workspace)).resolve()
     if not p.exists():
         return []
-    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
-    try:
-        rows = con.execute(
-            """
-            SELECT t, symbol, o, h, l, c, v
-            FROM bars_1m
-            WHERE root=? AND t>=? AND t<?
-            ORDER BY t
-            """,
-            (root, a, b),
-        ).fetchall()
-    finally:
-        con.close()
+    con = _ro_connection(p)
+    rows = con.execute(
+        """
+        SELECT t, symbol, o, h, l, c, v
+        FROM bars_1m
+        WHERE root=? AND t>=? AND t<?
+        ORDER BY t
+        """,
+        (root, a, b),
+    ).fetchall()
     return [
         {
             "t": int(t),
