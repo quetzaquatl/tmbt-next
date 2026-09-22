@@ -54,7 +54,10 @@ assert profile_variant_metadata("XAU_OTE_BOS_M15")["variant_status"] == "CANONIC
 assert profile_variant_metadata("XAU_OTE_BOS_H1")["variant_status"] == "GENERATED_RESEARCH_VARIANT"
 assert profile_variant_metadata("NQ_TTFM_D1_H1_M5")["variant_status"] == "DOCUMENTED_PUBLIC_MODEL_VARIANT"
 assert OUTRIGHT_RE.fullmatch("YMU26")
-assert len(research_scheduler.DEFAULT_CONFIG["profiles"]) == 15
+assert len(research_scheduler.DEFAULT_CONFIG["profiles"]) == 9
+assert len(research_scheduler.FOCUS_PROFILES) == 9
+assert len(research_scheduler.DIAGNOSTIC_PROFILES) == 6
+assert len(set(research_scheduler.FOCUS_PROFILES + research_scheduler.DIAGNOSTIC_PROFILES)) == 15
 assert research_scheduler.DEFAULT_CONFIG["source_audited_matrix_enabled"] is True
 assert research_scheduler.DEFAULT_CONFIG["experimental_timeframe_matrix_enabled"] is False
 
@@ -213,7 +216,7 @@ print("  Index OR:", ctx["index_or_low"], "->", ctx["index_or_high"], ctx["index
 print("  Rule pipeline:", pipe["pipeline_version"], "· setup", pipe["setup"]["status"])
 print("  Primitive tests: FVG + liquidity raid PASS")
 print("  Seasonality: point-in-time leakage guard PASS")
-print("  Canonical matrix: 15 profiles · generated TF variants opt-in")
+print("  Canonical registry: 15 profiles · auto-focus 9 · diagnostics 6 opt-in")
 print("  YM importer matcher: PASS")
 print("  Core knowledge:", coverage["lecture_count"], "lectures ·", coverage["lesson_knowledge_count"], "lesson notes ·", coverage["rule_catalog_count"], "rule groups")
 print("  Rule mapping:", coverage["rule_mapped_lecture_count"], "/115 lectures · unmapped", coverage["unmapped_lessons"])
