@@ -28,19 +28,27 @@ LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
 MATRIX_GENERATION = "source-audited-canonical-models-v2"
 LEGACY_MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "source-audited-research-matrix-v6-quick-policy"
-QUICK_POLICY_GENERATION = "context-quick-v2"
+SCHEDULER_GENERATION = "source-audited-research-matrix-v7-context-focus"
+QUICK_POLICY_GENERATION = "context-quick-v3-focus"
+
+FOCUS_PROFILES = [
+    "NQ_EBP_H1", "ES_EBP_H1",
+    "XAU_OTE_BOS_M15", "XAU_SWEEP_IFVG_M5",
+    "NQ_SILVER_BULLET_M1", "ES_SILVER_BULLET_M1",
+    "NQ_TTFM_D1_H1_M5", "ES_TTFM_D1_H1_M5", "GC_TTFM_D1_H1_M5",
+]
+
+DIAGNOSTIC_PROFILES = [
+    "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
+    "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
+    "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
+]
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
-    "profiles": [
-        "NQ_EBP_H1", "ES_EBP_H1",
-        "XAU_OTE_BOS_M15", "XAU_SWEEP_IFVG_M5",
-        "NQ_SILVER_BULLET_M1", "ES_SILVER_BULLET_M1",
-        "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
-        "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
-        "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
-    ],
+    "profiles": list(FOCUS_PROFILES),
+    "diagnostic_profiles_enabled": False,
+    "diagnostic_profiles": list(DIAGNOSTIC_PROFILES),
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
     "poll_seconds": 60,
@@ -115,6 +123,9 @@ def load_config() -> dict[str, Any]:
     if quick_policy_changed:
         cfg["test_news"] = False
         cfg["max_failed_cycles"] = 1
+        cfg["profiles"] = list(FOCUS_PROFILES)
+        cfg["diagnostic_profiles_enabled"] = False
+        cfg["diagnostic_profiles"] = list(DIAGNOSTIC_PROFILES)
         cfg["quick_policy_generation"] = QUICK_POLICY_GENERATION
 
     # Migrate the old automatically-generated 49-profile matrix to the
@@ -133,10 +144,10 @@ def load_config() -> dict[str, Any]:
     cfg["profiles"] = list(dict.fromkeys(cfg["profiles"]))
     if bool(cfg.get("ttfm_public_core_enabled", True)):
         ttfm_profiles = [
-            "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
-            "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
-            "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
+            "NQ_TTFM_D1_H1_M5", "ES_TTFM_D1_H1_M5", "GC_TTFM_D1_H1_M5",
         ]
+        if bool(cfg.get("diagnostic_profiles_enabled", False)):
+            ttfm_profiles += list(DIAGNOSTIC_PROFILES)
         for p in ttfm_profiles:
             if p not in cfg["profiles"]:
                 cfg["profiles"].append(p)
@@ -151,15 +162,9 @@ def load_config() -> dict[str, Any]:
             p for p in cfg["profiles"]
             if p not in {"XAU_OTE_BOS", "XAU_SWEEP_IFVG"}
         ]
-        canonical = [
-            "NQ_EBP_H1", "ES_EBP_H1",
-            "XAU_OTE_BOS_M15",
-            "XAU_SWEEP_IFVG_M5",
-            "NQ_SILVER_BULLET_M1", "ES_SILVER_BULLET_M1",
-            "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
-            "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
-            "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
-        ]
+        canonical = list(FOCUS_PROFILES)
+        if bool(cfg.get("diagnostic_profiles_enabled", False)):
+            canonical += list(DIAGNOSTIC_PROFILES)
         # Remove generated variants from a legacy persisted profile list.
         generated_prefixes = (
             "NQ_EBP_M15", "NQ_EBP_M30", "ES_EBP_M15", "ES_EBP_M30",
