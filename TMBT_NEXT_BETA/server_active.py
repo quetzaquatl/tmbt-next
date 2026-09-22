@@ -11,9 +11,11 @@ import context_factors
 import historical_store
 import ict_core_knowledge
 import ict_core_rules
+import model_context_analysis
 import research_autopilot_bridge
 import research_sync_bridge
 import research_scheduler
+import seasonality_context
 import smt_trade_management
 import ttfm_live
 import server_ready as ready
@@ -215,7 +217,7 @@ def context_locked_models():
 
 
 core.normalize_models = context_locked_models
-core.APP_VERSION = "0.9.65-beta-context-quick"
+core.APP_VERSION = "0.9.66-beta-seasonality-context"
 
 
 class Handler(ready.Handler):
@@ -254,6 +256,20 @@ class Handler(ready.Handler):
             return self.json(_masked_secret_status())
         if u.path == "/api/historical-status":
             return self.json(historical_store.status(core.WORKSPACE))
+        if u.path == "/api/seasonality":
+            q = parse_qs(u.query)
+            market = str(q.get("market", [""])[0]).strip().upper()
+            data = seasonality_context.ensure_cache(core.WORKSPACE)
+            if market:
+                row = ((data.get("markets") or {}).get(market) or {})
+                return self.json(row if row else {"error": "market_not_found", "market": market}, 200 if row else 404)
+            return self.json(data)
+        if u.path == "/api/research-context":
+            q = parse_qs(u.query)
+            run_id = str(q.get("run_id", [""])[0]).strip()
+            if not run_id:
+                return self.json({"error": "run_id_required"}, 400)
+            return self.json(model_context_analysis.context_for_run(run_id, workspace=core.WORKSPACE))
         if u.path == "/api/research-autopilot/status":
             return self.json(research_autopilot_bridge.status())
         if u.path == "/api/research-autopilot/profiles":
