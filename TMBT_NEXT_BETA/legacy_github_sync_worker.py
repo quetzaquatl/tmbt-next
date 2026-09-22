@@ -144,6 +144,13 @@ def main() -> int:
     github_sync.autopilot_latest_report = lambda workspace=None: research_autopilot_bridge.latest_report()
     github_sync.autopilot_profiles = lambda: research_autopilot_bridge.profiles()
 
+    # Build the compact numeric seasonality cache once per DB version. This is
+    # read-only against historical SQLite and safe while research jobs are active.
+    try:
+        seasonality_context.ensure_cache(github_sync.WORKSPACE)
+    except Exception:
+        pass
+
     # Publish compact TMBT Next-only state so ChatGPT can evaluate current
     # Databento readiness and automated research without raw market data.
     original_publish_state = github_sync._publish_state
@@ -158,7 +165,10 @@ def main() -> int:
             repo / "state" / "research_scheduler.json",
             _read_scheduler_state(github_sync.WORKSPACE),
         )
-        seasonal = seasonality_context.load_cache(github_sync.WORKSPACE)
+        try:
+            seasonal = seasonality_context.ensure_cache(github_sync.WORKSPACE)
+        except Exception:
+            seasonal = seasonality_context.load_cache(github_sync.WORKSPACE)
         if seasonal:
             changed |= github_sync._write_if_changed(
                 repo / "state" / "seasonality.json",
