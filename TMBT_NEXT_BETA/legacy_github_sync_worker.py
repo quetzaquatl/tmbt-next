@@ -8,6 +8,7 @@ from pathlib import Path
 import legacy_research_adapter
 import research_autopilot_bridge
 import historical_store
+import seasonality_context
 
 
 def _read_json_file(path: Path):
@@ -157,6 +158,12 @@ def main() -> int:
             repo / "state" / "research_scheduler.json",
             _read_scheduler_state(github_sync.WORKSPACE),
         )
+        seasonal = seasonality_context.load_cache(github_sync.WORKSPACE)
+        if seasonal:
+            changed |= github_sync._write_if_changed(
+                repo / "state" / "seasonality.json",
+                seasonal,
+            )
         latest = _read_json_file(github_sync.WORKSPACE / "research_reports" / "latest.json")
         if latest:
             changed |= github_sync._write_if_changed(repo / "reports" / "latest.json", latest)
