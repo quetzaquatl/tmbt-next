@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+import model_context_analysis
+
 WORKSPACE = Path(
     os.environ.get(
         "TMBT_WORKSPACE",
@@ -277,6 +279,7 @@ def performance_for_run(
         "sides": [_side_stats(frame, "Long"), _side_stats(frame, "Short")],
         "exit_reasons": _exit_stats(frame),
         "monthly": _monthly_stats(frame),
+        "context_analysis": model_context_analysis.context_for_run(str(run_id), workspace=WORKSPACE),
         "equity_curve": curve,
     }
     _CACHE[key] = result
