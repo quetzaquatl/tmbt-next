@@ -17,6 +17,7 @@ import pandas as pd
 import historical_store
 import ttfm_engine
 import legacy_runtime
+import model_context_analysis
 import ict_core_rules
 import ict_rule_engine
 
@@ -800,6 +801,25 @@ def activate() -> dict[str, Any]:
     def run_with_full_history_audit(request: dict[str, Any]):
         report = original_autopilot_run(request)
         try:
+            context_bundle = {}
+            for stage in report.get("stages") or []:
+                if not isinstance(stage, dict):
+                    continue
+                stage_name = str(stage.get("name") or "")
+                run_id = str(stage.get("run_id") or "")
+                if not run_id or stage_name not in {
+                    "development_baseline",
+                    "optimized_development_candidate",
+                    "validation",
+                }:
+                    continue
+                context_bundle[stage_name] = model_context_analysis.context_for_run(
+                    run_id,
+                    workspace=WORKSPACE,
+                )
+            if context_bundle:
+                report["context_analysis"] = context_bundle
+
             profile_id = str(report.get("profile") or request.get("profile") or "")
             profile = research_autopilot.PROFILES.get(profile_id) or {}
             splits = report.get("splits") or {}
@@ -865,6 +885,16 @@ def activate() -> dict[str, Any]:
                 os.replace(tmp, research_autopilot.REPORT_PATH)
         except Exception as exc:
             report["full_history_audit_error"] = f"{type(exc).__name__}: {exc}"
+        try:
+            research_autopilot.REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp = research_autopilot.REPORT_PATH.with_suffix(".tmp")
+            tmp.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+            os.replace(tmp, research_autopilot.REPORT_PATH)
+        except Exception:
+            pass
         return report
 
     research_autopilot.run = run_with_full_history_audit
