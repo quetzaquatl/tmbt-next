@@ -26,7 +26,7 @@ for name in (
 ):
     py_compile.compile(str(HERE / name), doraise=True)
 
-from ict_core_rules import profile_provenance, profile_variant_metadata, knowledge_coverage, EXECUTABLE_TO_KNOWLEDGE, CORE_RULES, core_rule_gate
+from ict_core_rules import profile_provenance, profile_variant_metadata, profile_knowledge_links, knowledge_coverage, EXECUTABLE_TO_KNOWLEDGE, CORE_RULES, core_rule_gate
 import ict_core_knowledge
 from ict_rule_engine import PIPELINE_VERSION, normalize_closed_bars, fair_value_gaps, confirmed_swings, liquidity_raids, profile_pipeline_contract, snapshot
 from context_factors import DEFAULT_CONFIG, _session_context
@@ -46,9 +46,9 @@ assert "IFVG_FIXED_BAR_EXPIRY" in ifvg["non_core_assumptions"]
 
 silver = profile_provenance("NQ_SILVER_BULLET_M1")
 assert silver["source_status"] == "NOT_2016_17_CORE_MODEL"
-assert "CORE_SEASONALITY_CONTEXT_ONLY" in ote["knowledge_context_rules"]
-assert "CORE_SEASONALITY_CONTEXT_ONLY" in silver["knowledge_context_rules"]
-assert "CORE_SEASONALITY_CONTEXT_ONLY" in profile_provenance("NQ_EBP_H1")["knowledge_context_rules"]
+assert "CORE_SEASONALITY_CONTEXT_ONLY" in profile_knowledge_links("XAU_OTE_BOS_M15")
+assert "CORE_SEASONALITY_CONTEXT_ONLY" in profile_knowledge_links("NQ_SILVER_BULLET_M1")
+assert "CORE_SEASONALITY_CONTEXT_ONLY" in profile_knowledge_links("NQ_EBP_H1")
 
 assert profile_variant_metadata("XAU_OTE_BOS_M15")["variant_status"] == "CANONICAL_FORMALIZED"
 assert profile_variant_metadata("XAU_OTE_BOS_H1")["variant_status"] == "GENERATED_RESEARCH_VARIANT"
