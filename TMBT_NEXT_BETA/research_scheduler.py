@@ -28,7 +28,7 @@ LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
 MATRIX_GENERATION = "source-audited-canonical-models-v2"
 LEGACY_MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "source-audited-research-matrix-v4"
+SCHEDULER_GENERATION = "source-audited-research-matrix-v5-quick-context"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -43,8 +43,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
     "poll_seconds": 60,
-    "max_failed_cycles": 3,
-    "test_news": True,
+    "max_failed_cycles": 2,
+    "test_news": False,
     "tick_audit": False,
     "run_on_start": True,
     "auto_live_promotion": False,
