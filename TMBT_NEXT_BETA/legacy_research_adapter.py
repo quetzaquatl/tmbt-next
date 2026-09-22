@@ -354,12 +354,19 @@ def activate() -> dict[str, Any]:
 
     research_autopilot = importlib.import_module("research_autopilot")
 
-    def full_history_splits(file_index):
-        """Use the complete available market history without hard-coded calendar years.
+    def _quick_research_enabled() -> bool:
+        return str(os.environ.get("TMBT_RESEARCH_QUICK", "1")).strip().lower() not in {
+            "0", "false", "no", "off"
+        }
 
-        70% development / 15% locked validation / 15% untouched holdout, split
-        by actual available trading dates. This keeps point-in-time research
-        discipline while allowing old history (e.g. 2010+) to participate.
+    def full_history_splits(file_index):
+        """Preserve the 70/15/15 validation/holdout boundary, but screen faster.
+
+        Quick mode never borrows dates from Validation or Holdout. It simply uses
+        the latest ~504 trading days *inside the existing Development partition*
+        for parameter search. This cuts the expensive optimizer scans sharply
+        without contaminating the locked partitions. Set TMBT_RESEARCH_QUICK=0
+        for the original full Development history.
         """
         if not file_index:
             raise ValueError("no_market_data")
@@ -369,16 +376,21 @@ def activate() -> dict[str, Any]:
             raise ValueError("not_enough_days_for_autopilot")
         i70 = max(1, min(n - 2, int(n * 0.70)))
         i85 = max(i70 + 1, min(n - 1, int(n * 0.85)))
+        dev_start_i = 0
+        split_mode = "full-history-70-15-15-v1"
+        if _quick_research_enabled() and i70 > 504:
+            dev_start_i = i70 - 504
+            split_mode = "quick-dev-tail-504d-preserve-val-holdout-v1"
         return {
             "full_start": dates[0].isoformat(),
             "full_end": dates[-1].isoformat(),
-            "development_start": dates[0].isoformat(),
+            "development_start": dates[dev_start_i].isoformat(),
             "development_end": dates[i70 - 1].isoformat(),
             "validation_start": dates[i70].isoformat(),
             "validation_end": dates[i85 - 1].isoformat(),
             "holdout_start": dates[i85].isoformat() if i85 < n else None,
             "holdout_end": dates[-1].isoformat() if i85 < n else None,
-            "split_mode": "full-history-70-15-15-v1",
+            "split_mode": split_mode,
         }
 
     research_autopilot._default_splits = full_history_splits
@@ -399,7 +411,7 @@ def activate() -> dict[str, Any]:
             "ifvg_min_points": 0.0,
             "ifvg_entry_depth_pct": 50.0,
             "ifvg_displacement_atr_mult": 0.0,
-            "ifvg_require_sweep_reclaim": False,
+            "ifvg_require_sweep_reclaim": True,
             "stop_buffer_points": 0.0,
             "min_target_rr": 1.0,
             "max_trades_per_day": 1,
@@ -447,7 +459,7 @@ def activate() -> dict[str, Any]:
                 "reference_name": "London 08-11",
                 "reference_start": "08:00",
                 "reference_end": "11:00",
-                "reference_tz": "Europe/Berlin",
+                "reference_tz": "Europe/London",
                 "ifvg_lookback_bars": 18,
                 "ifvg_retest_max_bars": 12,
             },
@@ -658,10 +670,24 @@ def activate() -> dict[str, Any]:
     # Native futures versions of the old, already-formalized EBP model.
     # This ports an existing formal model to actual NQ/ES history; it does not
     # turn discretionary Trader Observations into criteria.
+    # Knowledge-guided quick screen: keep the EBP candle definition stable and
+    # spend compute on freshness/range quality instead of repeatedly optimizing
+    # every candle percentage. The broader ICT context is treated separately.
     ebp_optimizers = [
-        {"name": "Close strength × limit expiry", "param1": "ebp_strong_close_pct", "values1": [10.0, 15.0, 20.0], "param2": "ebp_entry_valid_bars", "values2": [2, 4, 6, 8]},
-        {"name": "Strong entry × stop", "param1": "ebp_strong_entry_pct", "values1": [20.0, 25.0, 30.0], "param2": "ebp_strong_stop_pct", "values2": [70.0, 75.0, 80.0]},
-        {"name": "Indecisive entry × target", "param1": "ebp_indecisive_entry_pct", "values1": [40.0, 50.0, 60.0], "param2": "target_rr", "values2": [1.5, 2.0, 2.5, 3.0]},
+        {
+            "name": "Entry freshness × range quality",
+            "param1": "ebp_entry_valid_bars",
+            "values1": [2, 4, 6],
+            "param2": "ebp_min_range_atr",
+            "values2": [0.0, 0.75],
+        },
+        {
+            "name": "Indecisive entry × target",
+            "param1": "ebp_indecisive_entry_pct",
+            "values1": [45.0, 50.0, 55.0],
+            "param2": "target_rr",
+            "values2": [1.5, 2.0],
+        },
     ]
     for market in ("NQ", "ES"):
         for tf, suffix in (("15m", "M15"), ("30m", "M30"), ("1H", "H1")):
@@ -673,36 +699,35 @@ def activate() -> dict[str, Any]:
             }
 
     # Full timeframe research for the currently formalized OTE / iFVG models.
+    # OTE percentages (62 / 70.5 / 79) are source-certified. Do not burn grid
+    # budget rediscovering them. Test whether the impulse is meaningful and the
+    # retracement is still fresh; keep only a small swing-sensitivity check.
     ote_optimizers = [
         {
-            "name": "OTE depth × impulse",
-            "param1": "ote_entry_pct",
-            "values1": [62.0, 66.0, 70.5, 75.0, 79.0],
-            "param2": "ote_min_impulse_atr",
-            "values2": [0.75, 1.0, 1.25, 1.5],
+            "name": "Impulse quality × retest freshness",
+            "param1": "ote_min_impulse_atr",
+            "values1": [1.0, 1.25, 1.5],
+            "param2": "ote_retest_max_bars",
+            "values2": [4, 8, 12],
         },
         {
-            "name": "Pivot confirmation",
+            "name": "Institutional swing sensitivity",
             "param1": "ote_pivot_left",
-            "values1": [1, 2, 3, 4],
+            "values1": [1, 2],
             "param2": "ote_pivot_right",
-            "values2": [1, 2, 3, 4],
+            "values2": [1, 2],
         },
     ]
+    # For Sweep/iFVG research, require the liquidity reclaim in the preset and
+    # spend the grid on displacement quality + event freshness. iFVG itself
+    # remains a later-ICT/TMBT assumption, not a Core primitive.
     ifvg_optimizers = [
         {
-            "name": "iFVG depth × lookback",
-            "param1": "ifvg_entry_depth_pct",
-            "values1": [25.0, 50.0, 75.0],
-            "param2": "ifvg_lookback_bars",
-            "values2": [12, 18, 24, 36],
-        },
-        {
-            "name": "Inversion × retest window",
-            "param1": "ifvg_inversion_max_bars",
-            "values1": [6, 12, 18],
+            "name": "Displacement quality × retest freshness",
+            "param1": "ifvg_displacement_atr_mult",
+            "values1": [0.5, 1.0, 1.5],
             "param2": "ifvg_retest_max_bars",
-            "values2": [6, 12, 18, 24],
+            "values2": [4, 8, 12],
         },
     ]
 
@@ -741,18 +766,11 @@ def activate() -> dict[str, Any]:
     # optimize explicit TMBT implementation conventions, not undocumented/private indicator rules.
     ttfm_optimizers = [
         {
-            "name": "Protected-swing pivot confirmation",
-            "param1": "ote_pivot_left",
-            "values1": [1, 2, 3],
-            "param2": "ote_pivot_right",
-            "values2": [1, 2, 3],
-        },
-        {
-            "name": "CISD confirmation window × target",
+            "name": "CISD freshness × target",
             "param1": "cisd_max_bars",
-            "values1": [4, 6, 8, 12],
+            "values1": [4, 6, 8],
             "param2": "target_rr",
-            "values2": [2.0, 2.5, 3.0],
+            "values2": [2.0, 2.5],
         },
     ]
     ttfm_profiles = (
@@ -767,7 +785,10 @@ def activate() -> dict[str, Any]:
                 "label": f"{market_label} · TTFM {label}",
                 "preset": f"TTFM_{suffix}_{market}_FUTURES",
                 "market": market,
-                "optimizers": [dict(x) for x in ttfm_optimizers],
+                # D1-H1-M5 has a usable sample. H4/M15 is sparse and the
+                # H1-M15-M1 path currently yields zero trades, so those profiles
+                # run baseline/diagnostics only instead of wasting optimizer time.
+                "optimizers": [dict(x) for x in ttfm_optimizers] if suffix == "D1_H1_M5" else [],
             }
 
     # Replace the migrated permissive validation gate. A merely positive net
@@ -793,7 +814,7 @@ def activate() -> dict[str, Any]:
                 or splits.get("validation_end")
                 or ""
             )
-            if profile and full_start and full_end:
+            if profile and full_start and full_end and not _quick_research_enabled():
                 research_autopilot._status(
                     state="RUNNING",
                     profile=profile_id,
