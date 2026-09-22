@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import py_compile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -21,6 +21,8 @@ for name in (
     "backtest_context_adapter.py",
     "historical_store.py",
     "databento_history_import.py",
+    "seasonality_context.py",
+    "model_context_analysis.py",
 ):
     py_compile.compile(str(HERE / name), doraise=True)
 
@@ -30,6 +32,7 @@ from ict_rule_engine import PIPELINE_VERSION, normalize_closed_bars, fair_value_
 from context_factors import DEFAULT_CONFIG, _session_context
 from databento_history_import import OUTRIGHT_RE
 import research_scheduler
+import seasonality_context
 
 ote = profile_provenance("XAU_OTE_BOS_M15")
 assert ote["source_status"] == "MIXED"
@@ -43,6 +46,9 @@ assert "IFVG_FIXED_BAR_EXPIRY" in ifvg["non_core_assumptions"]
 
 silver = profile_provenance("NQ_SILVER_BULLET_M1")
 assert silver["source_status"] == "NOT_2016_17_CORE_MODEL"
+assert "CORE_SEASONALITY_CONTEXT_ONLY" in ote["knowledge_context_rules"]
+assert "CORE_SEASONALITY_CONTEXT_ONLY" in silver["knowledge_context_rules"]
+assert "CORE_SEASONALITY_CONTEXT_ONLY" in profile_provenance("NQ_EBP_H1")["knowledge_context_rules"]
 
 assert profile_variant_metadata("XAU_OTE_BOS_M15")["variant_status"] == "CANONICAL_FORMALIZED"
 assert profile_variant_metadata("XAU_OTE_BOS_H1")["variant_status"] == "GENERATED_RESEARCH_VARIANT"
@@ -183,12 +189,30 @@ assert abs(ctx["index_or_high"] - 121.75) < 1e-9
 assert abs(ctx["index_or_low"] - 109.5) < 1e-9
 assert ctx["index_session_phase"] == "AM_AFTER_OR"
 
+
+# Leakage-safe seasonal context: future rows must not affect a historical trade.
+season_rows = [
+    {"date": date(2021, 1, 12), "return_pct": 1.0, "range_pct": 2.0},
+    {"date": date(2022, 1, 11), "return_pct": 1.5, "range_pct": 2.0},
+    {"date": date(2023, 1, 10), "return_pct": 0.5, "range_pct": 2.0},
+    {"date": date(2025, 1, 7), "return_pct": -99.0, "range_pct": 2.0},
+]
+season = seasonality_context.point_in_time_consensus_from_rows(
+    season_rows, date(2024, 1, 9), bucket="iso_week", min_samples=3
+)
+assert season["label"] == "BULLISH"
+assert season["point_in_time_safe"] is True
+assert all(
+    row.get("history_last") is None or row["history_last"] < "2024-01-09"
+    for row in season["windows"].values()
+)
 print("ICT Core source-audit verification: PASS")
 print("  OTE provenance:", ote["source_status"], ote["evidence_label"])
 print("  iFVG provenance:", ifvg["source_status"], ifvg["evidence_label"])
 print("  Index OR:", ctx["index_or_low"], "->", ctx["index_or_high"], ctx["index_session_phase"])
 print("  Rule pipeline:", pipe["pipeline_version"], "· setup", pipe["setup"]["status"])
 print("  Primitive tests: FVG + liquidity raid PASS")
+print("  Seasonality: point-in-time leakage guard PASS")
 print("  Canonical matrix: 15 profiles · generated TF variants opt-in")
 print("  YM importer matcher: PASS")
 print("  Core knowledge:", coverage["lecture_count"], "lectures ·", coverage["lesson_knowledge_count"], "lesson notes ·", coverage["rule_catalog_count"], "rule groups")
