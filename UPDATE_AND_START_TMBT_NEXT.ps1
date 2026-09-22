@@ -59,3 +59,25 @@ if (-not (Test-Path $StartBat)) {
 
 Write-Host 'Starte TMBT Next ...' -ForegroundColor Green
 Start-Process -FilePath $StartBat -WorkingDirectory (Split-Path -Parent $StartBat)
+
+# Wait briefly for the local web server, then open the dashboard automatically.
+$DashboardUrl = 'http://127.0.0.1:8510/'
+$ready = $false
+for ($i = 0; $i -lt 30; $i++) {
+    try {
+        $response = Invoke-WebRequest -Uri $DashboardUrl -UseBasicParsing -TimeoutSec 1
+        if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+            $ready = $true
+            break
+        }
+    } catch {
+        Start-Sleep -Milliseconds 750
+    }
+}
+if ($ready) {
+    Write-Host "Oeffne Dashboard: $DashboardUrl" -ForegroundColor Green
+    Start-Process $DashboardUrl
+} else {
+    Write-Host "Dashboard wurde gestartet, Browser konnte aber nicht automatisch geoeffnet werden." -ForegroundColor Yellow
+    Write-Host "Oeffne manuell: $DashboardUrl" -ForegroundColor Yellow
+}
