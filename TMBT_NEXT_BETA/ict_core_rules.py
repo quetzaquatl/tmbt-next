@@ -336,6 +336,7 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
             "CORE_OPENING_PRICE_CONTEXT",
             "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
             "CORE_ADR_TARGET_DISCIPLINE",
+            "CORE_SEASONALITY_CONTEXT_ONLY",
         ]
     if "_SWEEP_IFVG_" in p:
         return [
@@ -349,6 +350,7 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
             "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
             "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
             "CORE_ADR_TARGET_DISCIPLINE",
+            "CORE_SEASONALITY_CONTEXT_ONLY",
         ]
     if "_SILVER_BULLET_" in p:
         links = [
@@ -361,6 +363,7 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
             "CORE_ASIAN_RANGE_CONTEXT",
             "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
             "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
+            "CORE_SEASONALITY_CONTEXT_ONLY",
         ]
         if p.startswith(("NQ_", "ES_")):
             links += [
@@ -379,6 +382,7 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
             "CORE_OPENING_PRICE_CONTEXT",
             "CORE_ASIAN_RANGE_CONTEXT",
             "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
+            "CORE_SEASONALITY_CONTEXT_ONLY",
         ]
         if p.startswith(("NQ_", "ES_")):
             links += [
@@ -402,6 +406,7 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
             "CORE_INDEX_AM_RELATIVE_HILO",
             "CORE_INDEX_PM_SESSION",
             "CORE_INDEX_SMT_BASKET",
+            "CORE_SEASONALITY_CONTEXT_ONLY",
         ]
     return []
 
