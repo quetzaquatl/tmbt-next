@@ -111,10 +111,10 @@ def _alignment(side: Any, seasonal_label: str) -> str:
 def _trade_dates(frame: pd.DataFrame) -> pd.Series:
     if "entry_time" in frame.columns:
         dt = pd.to_datetime(frame["entry_time"], utc=True, errors="coerce")
-        try:
-            return dt.dt.tz_convert(NY).dt.date
-        except Exception:
-            return dt.dt.date
+        return dt.apply(
+            lambda x: seasonality_context._trading_date(int(x.timestamp() * 1000))
+            if not pd.isna(x) else pd.NaT
+        )
     if "date" in frame.columns:
         return pd.to_datetime(frame["date"], errors="coerce").dt.date
     return pd.Series([pd.NaT] * len(frame), index=frame.index)
