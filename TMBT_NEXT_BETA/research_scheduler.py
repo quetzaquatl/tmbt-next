@@ -28,7 +28,8 @@ LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
 MATRIX_GENERATION = "source-audited-canonical-models-v2"
 LEGACY_MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "source-audited-research-matrix-v5-quick-context"
+SCHEDULER_GENERATION = "source-audited-research-matrix-v6-quick-policy"
+QUICK_POLICY_GENERATION = "context-quick-v2"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -43,7 +44,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
     "poll_seconds": 60,
-    "max_failed_cycles": 2,
+    "max_failed_cycles": 1,
     "test_news": False,
     "tick_audit": False,
     "run_on_start": True,
@@ -104,6 +105,17 @@ def load_config() -> dict[str, Any]:
     cfg = dict(DEFAULT_CONFIG)
     persisted = _read_json(CONFIG)
     cfg.update(persisted)
+
+    # Quick-research policy migration. Persisted configs from older builds used
+    # three failed refinement rounds plus three news variants per model, which
+    # dominated runtime without helping zero/sparse profiles. In quick mode we
+    # do one clean pass through the matrix; promising models are followed up
+    # deliberately after review.
+    quick_policy_changed = str(persisted.get("quick_policy_generation") or "") != QUICK_POLICY_GENERATION
+    if quick_policy_changed:
+        cfg["test_news"] = False
+        cfg["max_failed_cycles"] = 1
+        cfg["quick_policy_generation"] = QUICK_POLICY_GENERATION
 
     # Migrate the old automatically-generated 49-profile matrix to the
     # source-audited canonical matrix. The broad cross-timeframe clones are not
@@ -195,7 +207,7 @@ def load_config() -> dict[str, Any]:
     cfg["cycle_hours_failed"] = max(1, int(cfg.get("cycle_hours_failed") or 24))
     cfg["cycle_hours_passed"] = max(24, int(cfg.get("cycle_hours_passed") or 168))
     cfg["max_failed_cycles"] = max(1, min(10, int(cfg.get("max_failed_cycles") or 3)))
-    if not CONFIG.exists() or migrated_old_matrix:
+    if not CONFIG.exists() or migrated_old_matrix or quick_policy_changed:
         _write_json(CONFIG, cfg)
     return cfg
 
