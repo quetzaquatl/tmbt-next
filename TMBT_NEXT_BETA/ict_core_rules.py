@@ -316,7 +316,12 @@ def profile_provenance(profile_id: str) -> dict[str, Any]:
 
 
 def profile_knowledge_links(profile_id: str) -> list[str]:
-    """Broader Core knowledge relevant to a profile without claiming model origin."""
+    """Broader Core knowledge relevant to a profile without claiming model origin.
+
+    These links are context candidates for research/ablation. A link does not
+    turn a TMBT/later-model rule into ICT Core and does not imply an execution
+    gate, especially for PARTIAL/REFERENCE knowledge records.
+    """
     p = str(profile_id or "").upper()
     if "_OTE_BOS_" in p:
         return [
@@ -324,21 +329,38 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
             "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
             "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
             "CORE_TIMEFRAME_HIERARCHY",
+            "CORE_DAYTRADE_HTF_ALIGNMENT",
             "CORE_INSTITUTIONAL_SWING_POINTS",
             "CORE_PD_ARRAY_MATRIX",
+            "CORE_TIME_OF_DAY",
+            "CORE_OPENING_PRICE_CONTEXT",
+            "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
+            "CORE_ADR_TARGET_DISCIPLINE",
         ]
     if "_SWEEP_IFVG_" in p:
         return [
             "CORE_FAIR_VALUE_GAP",
             "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
             "CORE_TIMEFRAME_HIERARCHY",
+            "CORE_DAYTRADE_HTF_ALIGNMENT",
             "CORE_TIME_OF_DAY",
+            "CORE_OPENING_PRICE_CONTEXT",
+            "CORE_ASIAN_RANGE_CONTEXT",
+            "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
+            "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
+            "CORE_ADR_TARGET_DISCIPLINE",
         ]
     if "_SILVER_BULLET_" in p:
         links = [
             "CORE_FAIR_VALUE_GAP",
             "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
+            "CORE_TIMEFRAME_HIERARCHY",
+            "CORE_DAYTRADE_HTF_ALIGNMENT",
             "CORE_TIME_OF_DAY",
+            "CORE_OPENING_PRICE_CONTEXT",
+            "CORE_ASIAN_RANGE_CONTEXT",
+            "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
+            "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
         ]
         if p.startswith(("NQ_", "ES_")):
             links += [
@@ -349,7 +371,15 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
             ]
         return links
     if "_TTFM_" in p:
-        links = ["CORE_TIMEFRAME_HIERARCHY", "CORE_DAYTRADE_HTF_ALIGNMENT"]
+        links = [
+            "CORE_TIMEFRAME_HIERARCHY",
+            "CORE_DAYTRADE_HTF_ALIGNMENT",
+            "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
+            "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
+            "CORE_OPENING_PRICE_CONTEXT",
+            "CORE_ASIAN_RANGE_CONTEXT",
+            "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
+        ]
         if p.startswith(("NQ_", "ES_")):
             links += [
                 "CORE_INDEX_OPENING_RANGE",
@@ -358,6 +388,21 @@ def profile_knowledge_links(profile_id: str) -> list[str]:
                 "CORE_INDEX_SMT_BASKET",
             ]
         return links
+    if p.startswith(("NQ_EBP_", "ES_EBP_")):
+        return [
+            "CORE_TIMEFRAME_HIERARCHY",
+            "CORE_LIQUIDITY_OLD_HIGHS_LOWS",
+            "CORE_EQUILIBRIUM_PREMIUM_DISCOUNT",
+            "CORE_TIME_OF_DAY",
+            "CORE_OPENING_PRICE_CONTEXT",
+            "CORE_ASIAN_RANGE_CONTEXT",
+            "CORE_PREVIOUS_DAY_EXTREME_REVERSALS",
+            "CORE_CONSOLIDATION_BEHAVIOR",
+            "CORE_INDEX_OPENING_RANGE",
+            "CORE_INDEX_AM_RELATIVE_HILO",
+            "CORE_INDEX_PM_SESSION",
+            "CORE_INDEX_SMT_BASKET",
+        ]
     return []
 
 
