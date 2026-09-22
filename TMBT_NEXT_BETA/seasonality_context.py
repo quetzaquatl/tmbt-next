@@ -14,7 +14,8 @@ import historical_store
 
 NY = ZoneInfo("America/New_York")
 SUPPORTED_MARKETS = ("NQ", "ES", "GC")
-CACHE_VERSION = "market-seasonality-v1"
+CACHE_VERSION = "market-seasonality-v2"
+_DAILY_CACHE: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
 
 
 def _workspace() -> Path:
@@ -53,7 +54,14 @@ def _load_hourly(market: str, workspace: Path | None = None) -> list[tuple[int, 
 
 
 def _daily(market: str, workspace: Path | None = None) -> list[dict[str, Any]]:
-    rows = _load_hourly(market, workspace)
+    root = workspace or _workspace()
+    db = historical_store.db_path(root)
+    mtime_ns = db.stat().st_mtime_ns if db.exists() else 0
+    key = (str(market).upper(), str(db), int(mtime_ns))
+    cached = _DAILY_CACHE.get(key)
+    if cached is not None:
+        return list(cached)
+    rows = _load_hourly(market, root)
     by_day: dict[date, dict[str, Any]] = {}
     for t, o, h, l, c, v in rows:
         d = _trading_date(t)
@@ -99,6 +107,8 @@ def _daily(market: str, workspace: Path | None = None) -> list[dict[str, Any]]:
             "range_pct": ((h - l) / o) * 100.0,
             "volume": float(x["volume"]),
         })
+    _DAILY_CACHE.clear()
+    _DAILY_CACHE[key] = list(out)
     return out
 
 
@@ -164,10 +174,123 @@ def build_market(market: str, workspace: Path | None = None) -> dict[str, Any]:
     return result
 
 
+def _bucket_key(d: date, bucket: str) -> int:
+    b = str(bucket or "iso_week").lower()
+    if b == "month":
+        return int(d.month)
+    if b == "weekday":
+        return int(d.weekday())
+    if b == "quarter":
+        return int((d.month - 1) // 3 + 1)
+    if b == "day_of_month":
+        return int(d.day)
+    return int(d.isocalendar().week)
+
+
+def _history_window(rows: list[dict[str, Any]], when: date, years: int | None) -> list[dict[str, Any]]:
+    hist = [x for x in rows if x["date"] < when]
+    if years is None:
+        return hist
+    try:
+        cutoff = when.replace(year=max(1, when.year - int(years)))
+    except ValueError:
+        cutoff = when.replace(month=2, day=28, year=max(1, when.year - int(years)))
+    return [x for x in hist if x["date"] >= cutoff]
+
+
+def point_in_time_consensus_from_rows(
+    rows: list[dict[str, Any]],
+    when: date,
+    *,
+    bucket: str = "iso_week",
+    min_samples: int | None = None,
+) -> dict[str, Any]:
+    """Leakage-safe seasonality using only dates strictly before the target date.
+
+    The 5y/15y/all windows mirror the external reference horizons, but values
+    come only from TMBT Databento history. This remains context, not a signal.
+    """
+    if isinstance(when, datetime):
+        when = when.date()
+    key = _bucket_key(when, bucket)
+    min_n = int(min_samples if min_samples is not None else (3 if bucket == "iso_week" else 8))
+    details: dict[str, Any] = {}
+    signs: list[int] = []
+    for label, years in (("5y", 5), ("15y", 15), ("all", None)):
+        sample = [x for x in _history_window(rows, when, years) if _bucket_key(x["date"], bucket) == key]
+        metric = _metric(sample)
+        mean_ret = float(metric.get("mean_return_pct") or 0.0) if metric.get("n") else 0.0
+        direction = "UNAVAILABLE"
+        sign = 0
+        if int(metric.get("n") or 0) >= min_n:
+            if mean_ret > 0:
+                direction, sign = "BULLISH", 1
+            elif mean_ret < 0:
+                direction, sign = "BEARISH", -1
+            else:
+                direction, sign = "NEUTRAL", 0
+            signs.append(sign)
+        details[label] = {
+            **metric,
+            "direction": direction,
+            "history_first": sample[0]["date"].isoformat() if sample else None,
+            "history_last": sample[-1]["date"].isoformat() if sample else None,
+        }
+
+    score = (sum(signs) / len(signs)) if signs else 0.0
+    if len(signs) < 2:
+        label = "UNAVAILABLE"
+    elif score >= (1.0 / 3.0):
+        label = "BULLISH"
+    elif score <= (-1.0 / 3.0):
+        label = "BEARISH"
+    else:
+        label = "MIXED"
+
+    return {
+        "as_of_date": when.isoformat(),
+        "bucket": bucket,
+        "bucket_value": key,
+        "label": label,
+        "score": round(float(score), 6),
+        "available_windows": len(signs),
+        "minimum_samples_per_window": min_n,
+        "windows": details,
+        "point_in_time_safe": True,
+        "usage": "context_only",
+    }
+
+
+def point_in_time_consensus(
+    market: str,
+    when: date,
+    *,
+    workspace: Path | None = None,
+    bucket: str = "iso_week",
+    rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    root = str(market).upper()
+    if root not in SUPPORTED_MARKETS:
+        return {
+            "market": root,
+            "as_of_date": when.isoformat() if hasattr(when, "isoformat") else str(when),
+            "label": "UNAVAILABLE",
+            "reason": "unsupported_market",
+            "point_in_time_safe": True,
+            "usage": "context_only",
+        }
+    daily = rows if rows is not None else _daily(root, workspace)
+    result = point_in_time_consensus_from_rows(daily, when, bucket=bucket)
+    result["market"] = root
+    result["source"] = "Databento continuous futures; prior dates only"
+    return result
+
 def build_all(workspace: Path | None = None) -> dict[str, Any]:
     root = workspace or _workspace()
+    db = historical_store.db_path(root)
     payload = {
         "version": CACHE_VERSION,
+        "db_mtime_ns": db.stat().st_mtime_ns if db.exists() else 0,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "markets": {m: build_market(m, root) for m in SUPPORTED_MARKETS},
         "usage_note": (
@@ -182,6 +305,20 @@ def build_all(workspace: Path | None = None) -> dict[str, Any]:
     tmp.replace(out)
     payload["path"] = str(out)
     return payload
+
+
+def ensure_cache(workspace: Path | None = None) -> dict[str, Any]:
+    root = workspace or _workspace()
+    db = historical_store.db_path(root)
+    current_mtime = db.stat().st_mtime_ns if db.exists() else 0
+    cached = load_cache(root)
+    if (
+        cached.get("version") == CACHE_VERSION
+        and int(cached.get("db_mtime_ns") or 0) == int(current_mtime)
+        and cached.get("markets")
+    ):
+        return cached
+    return build_all(root)
 
 
 def load_cache(workspace: Path | None = None) -> dict[str, Any]:
