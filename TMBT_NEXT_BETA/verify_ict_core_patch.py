@@ -23,6 +23,9 @@ for name in (
     "databento_history_import.py",
     "seasonality_context.py",
     "model_context_analysis.py",
+    "server_active.py",
+    "legacy_github_sync_worker.py",
+    "research_performance.py",
 ):
     py_compile.compile(str(HERE / name), doraise=True)
 
