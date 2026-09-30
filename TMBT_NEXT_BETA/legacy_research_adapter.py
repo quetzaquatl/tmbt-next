@@ -57,10 +57,32 @@ def _finite(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def strict_validation_verdict(dev: dict[str, Any], val: dict[str, Any], min_val_trades: int) -> dict[str, Any]:
+def strict_validation_verdict(
+    dev: dict[str, Any],
+    val: dict[str, Any],
+    min_val_trades: int,
+    min_dev_trades: int | None = None,
+) -> dict[str, Any]:
     req = dict(STRICT_REQUIREMENTS)
+    if min_dev_trades is None:
+        # The migrated legacy autopilot calls this validator with the historical
+        # three-argument signature. Read the active TMBT Next request so the
+        # profile-specific Development sample gate is still enforced there.
+        try:
+            active_request = json.loads(
+                (WORKSPACE / "research_autopilot" / "request.json").read_text(
+                    encoding="utf-8", errors="ignore"
+                )
+            )
+            min_dev_trades = int((active_request or {}).get("min_dev_trades") or 0)
+        except Exception:
+            min_dev_trades = 0
+
+    min_dev_trades = max(0, int(min_dev_trades or 0))
+    min_val_trades = max(0, int(min_val_trades or 0))
     d_exp = _finite(dev.get("expectancy_r"))
     d_pf = _finite(dev.get("profit_factor_r"))
+    d_trades = int(dev.get("trades") or 0)
     v_exp = _finite(val.get("expectancy_r"))
     v_pf = _finite(val.get("profit_factor_r"))
     v_net = _finite(val.get("net_r"))
@@ -71,9 +93,10 @@ def strict_validation_verdict(dev: dict[str, Any], val: dict[str, Any], min_val_
     gates = {
         "development_expectancy_ge_0_10R": d_exp >= req["development_expectancy_min_r"],
         "development_profit_factor_ge_1_20": d_pf >= req["development_profit_factor_min"],
+        "development_min_trades": d_trades >= min_dev_trades,
         "validation_expectancy_ge_0_08R": v_exp >= req["validation_expectancy_min_r"],
         "validation_profit_factor_ge_1_20": v_pf >= req["validation_profit_factor_min"],
-        "validation_min_trades": v_trades >= int(min_val_trades),
+        "validation_min_trades": v_trades >= min_val_trades,
         "validation_net_r_ge_10": v_net >= req["validation_net_r_min"],
         "expectancy_retention_ge_50pct": bool(retention is not None and retention >= req["expectancy_retention_min"]),
         "validation_recovery_factor_ge_1_50": recovery >= req["validation_recovery_factor_min"],
@@ -84,7 +107,7 @@ def strict_validation_verdict(dev: dict[str, Any], val: dict[str, Any], min_val_
     core = (
         v_exp > 0
         and v_pf > 1.0
-        and v_trades >= int(min_val_trades)
+        and v_trades >= min_val_trades
         and v_net > 0
     )
     verdict = "PASS" if all_pass else ("WEAK" if core else "FAIL")
@@ -92,12 +115,13 @@ def strict_validation_verdict(dev: dict[str, Any], val: dict[str, Any], min_val_
         "verdict": verdict,
         "gates": gates,
         "requirements": req,
-        "min_val_trades": int(min_val_trades),
+        "min_dev_trades": min_dev_trades,
+        "min_val_trades": min_val_trades,
         "expectancy_retention": retention,
         "validation_recovery_factor": recovery,
         "passed_gates": passed,
         "total_gates": len(gates),
-        "gate_version": "strict-live-v2",
+        "gate_version": "strict-live-v3-dev-sample",
     }
 
 
