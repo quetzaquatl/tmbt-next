@@ -26,10 +26,10 @@ LOCK_FILE = ROOT / "scheduler.lock"
 REPORT_ROOT = WORKSPACE / "research_reports"
 LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
-MATRIX_GENERATION = "source-audited-canonical-models-v2"
+MATRIX_GENERATION = "visible-models-rerun-v3-dev-sample-gate"
 LEGACY_MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "source-audited-research-matrix-v7-context-focus"
-QUICK_POLICY_GENERATION = "context-quick-v3-focus"
+SCHEDULER_GENERATION = "visible-models-research-matrix-v8-dev-sample-gate"
+QUICK_POLICY_GENERATION = "context-quick-v4-all-visible-rerun"
 
 FOCUS_PROFILES = [
     "NQ_EBP_H1", "ES_EBP_H1",
@@ -44,10 +44,24 @@ DIAGNOSTIC_PROFILES = [
     "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
 ]
 
+# Explicit one-pass rerun requested after the Development sample-size gate fix.
+# This is the 19-profile set currently exposed in Auto Research Lab; it is
+# intentionally narrower than the old generated full timeframe matrix.
+RERUN_PROFILES = [
+    "NQ_EBP_H1", "ES_EBP_H1",
+    "XAU_OTE_BOS", "XAU_SWEEP_IFVG",
+    "NQ_EBP_M15", "NQ_EBP_M30",
+    "XAU_OTE_BOS_M15", "XAU_SWEEP_IFVG_M5",
+    "NQ_SILVER_BULLET_M1", "ES_SILVER_BULLET_M1",
+    "NQ_TTFM_D1_H1_M5", "NQ_TTFM_D1_H4_M15", "NQ_TTFM_H1_M15_M1",
+    "ES_TTFM_D1_H1_M5", "ES_TTFM_D1_H4_M15", "ES_TTFM_H1_M15_M1",
+    "GC_TTFM_D1_H1_M5", "GC_TTFM_D1_H4_M15", "GC_TTFM_H1_M15_M1",
+]
+
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
-    "profiles": list(FOCUS_PROFILES),
-    "diagnostic_profiles_enabled": False,
+    "profiles": list(RERUN_PROFILES),
+    "diagnostic_profiles_enabled": True,
     "diagnostic_profiles": list(DIAGNOSTIC_PROFILES),
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
@@ -65,6 +79,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "source_audited_matrix_enabled": True,
     "experimental_timeframe_matrix_enabled": False,
     "full_model_matrix_enabled": False,
+    "all_visible_rerun_enabled": True,
     "matrix_generation": MATRIX_GENERATION,
 }
 
@@ -123,9 +138,11 @@ def load_config() -> dict[str, Any]:
     if quick_policy_changed:
         cfg["test_news"] = False
         cfg["max_failed_cycles"] = 1
-        cfg["profiles"] = list(FOCUS_PROFILES)
-        cfg["diagnostic_profiles_enabled"] = False
+        cfg["profiles"] = list(RERUN_PROFILES)
+        cfg["diagnostic_profiles_enabled"] = True
         cfg["diagnostic_profiles"] = list(DIAGNOSTIC_PROFILES)
+        cfg["all_visible_rerun_enabled"] = True
+        cfg["matrix_generation"] = MATRIX_GENERATION
         cfg["quick_policy_generation"] = QUICK_POLICY_GENERATION
 
     # Migrate the old automatically-generated 49-profile matrix to the
@@ -152,7 +169,7 @@ def load_config() -> dict[str, Any]:
             if p not in cfg["profiles"]:
                 cfg["profiles"].append(p)
 
-    if bool(cfg.get("source_audited_matrix_enabled", True)):
+    if bool(cfg.get("source_audited_matrix_enabled", True)) and not bool(cfg.get("all_visible_rerun_enabled", False)):
         # Canonical model definitions only. These are the profiles that map to
         # an original formalized model or an explicitly documented public model.
         # Cross-timeframe clones are intentionally excluded from the default
@@ -645,12 +662,20 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
     dev = _summary(report, "development_summary")
     val = _summary(report, "validation_summary")
     old_validation = report.get("validation") or {}
+    requirements = research_autopilot_bridge.research_requirements(str(report.get("profile") or ""))
+    min_dev_trades = int(
+        (report.get("rules") or {}).get("min_dev_trades")
+        or requirements.get("min_dev_trades")
+        or 100
+    )
     min_val_trades = int(
         (report.get("rules") or {}).get("min_val_trades")
-        or research_autopilot_bridge.research_requirements(str(report.get("profile") or "")).get("min_val_trades")
+        or requirements.get("min_val_trades")
         or 50
     )
-    validation = legacy_research_adapter.strict_validation_verdict(dev, val, min_val_trades)
+    validation = legacy_research_adapter.strict_validation_verdict(
+        dev, val, min_val_trades, min_dev_trades
+    )
     verdict = str(validation.get("verdict") or "UNKNOWN").upper()
 
     good: list[str] = []
@@ -661,6 +686,7 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
     b_pf, d_pf = _num(baseline, "profit_factor_r"), _num(dev, "profit_factor_r")
     b_dd, d_dd = _num(baseline, "max_drawdown_r"), _num(dev, "max_drawdown_r")
     v_exp, v_pf = _num(val, "expectancy_r"), _num(val, "profit_factor_r")
+    d_trades = int(dev.get("trades") or 0)
     v_trades = int(val.get("trades") or 0)
 
     if dev:
@@ -676,6 +702,11 @@ def analyze_report(report: dict[str, Any], *, failed_cycles: int, max_failed_cyc
             good.append(_delta_text("Development Drawdown R", b_dd, d_dd, 1))
         elif d_dd > 0:
             bad.append(_delta_text("Development Drawdown R", b_dd, d_dd, 1))
+
+    if d_trades < min_dev_trades:
+        bad.append(f"Development Stichprobe zu klein: {d_trades} < {min_dev_trades} Trades.")
+    else:
+        good.append(f"Development Stichprobe erfüllt: {d_trades} >= {min_dev_trades} Trades.")
 
     if v_exp >= 0.08:
         good.append(f"Validation Expectancy erfüllt: {v_exp:.3f}R/Trade.")
