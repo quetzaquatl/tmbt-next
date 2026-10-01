@@ -26,10 +26,10 @@ LOCK_FILE = ROOT / "scheduler.lock"
 REPORT_ROOT = WORKSPACE / "research_reports"
 LATEST_REPORT = REPORT_ROOT / "latest.json"
 LATEST_MD = REPORT_ROOT / "latest.md"
-MATRIX_GENERATION = "visible-models-rerun-v3-dev-sample-gate"
+MATRIX_GENERATION = "visible-models-rerun-v4-adaptive-dev-refine"
 LEGACY_MATRIX_GENERATION = "all-formalized-models-valid-tfs-v1"
-SCHEDULER_GENERATION = "visible-models-research-matrix-v8-dev-sample-gate"
-QUICK_POLICY_GENERATION = "context-quick-v4-all-visible-rerun"
+SCHEDULER_GENERATION = "visible-models-research-matrix-v9-adaptive-dev-refine"
+QUICK_POLICY_GENERATION = "context-quick-v5-adaptive-dev-refine"
 
 FOCUS_PROFILES = [
     "NQ_EBP_H1", "ES_EBP_H1",
@@ -66,7 +66,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "cycle_hours_failed": 24,
     "cycle_hours_passed": 168,
     "poll_seconds": 60,
-    "max_failed_cycles": 1,
+    "max_failed_cycles": 2,
     "test_news": False,
     "tick_audit": False,
     "run_on_start": True,
@@ -137,7 +137,7 @@ def load_config() -> dict[str, Any]:
     quick_policy_changed = str(persisted.get("quick_policy_generation") or "") != QUICK_POLICY_GENERATION
     if quick_policy_changed:
         cfg["test_news"] = False
-        cfg["max_failed_cycles"] = 1
+        cfg["max_failed_cycles"] = 2
         cfg["profiles"] = list(RERUN_PROFILES)
         cfg["diagnostic_profiles_enabled"] = True
         cfg["diagnostic_profiles"] = list(DIAGNOSTIC_PROFILES)
@@ -849,6 +849,42 @@ def _numeric_refine(values: list[Any], chosen: Any) -> list[Any]:
     return [round(x, 6) for x in out]
 
 
+REFINEMENT_BOUNDS: dict[str, tuple[float | None, float | None]] = {
+    "target_rr": (1.0, 4.0),
+    "ebp_entry_valid_bars": (1.0, 20.0),
+    "ebp_min_range_atr": (0.0, 3.0),
+    "ebp_indecisive_entry_pct": (20.0, 90.0),
+    "ifvg_displacement_atr_mult": (0.0, 3.0),
+    "ifvg_retest_max_bars": (1.0, 40.0),
+    "ote_min_impulse_atr": (0.0, 3.0),
+    "ote_retest_max_bars": (1.0, 40.0),
+    "ote_pivot_left": (1.0, 8.0),
+    "ote_pivot_right": (1.0, 8.0),
+    "cisd_max_bars": (1.0, 20.0),
+}
+
+
+def _bounded_numeric_refine(values: list[Any], chosen: Any, parameter: str) -> list[Any]:
+    refined = _numeric_refine(values, chosen)
+    lo, hi = REFINEMENT_BOUNDS.get(str(parameter), (None, None))
+    bounded = []
+    for value in refined:
+        try:
+            x = float(value)
+        except Exception:
+            bounded.append(value)
+            continue
+        if lo is not None:
+            x = max(float(lo), x)
+        if hi is not None:
+            x = min(float(hi), x)
+        if isinstance(value, int) and not isinstance(value, bool):
+            bounded.append(int(round(x)))
+        else:
+            bounded.append(round(x, 6))
+    return sorted(set(bounded))
+
+
 def refined_optimizers(profile: str, previous_report: dict[str, Any]) -> list[dict[str, Any]]:
     profiles = research_autopilot_bridge.profiles()
     p = profiles.get(profile) or {}
@@ -859,9 +895,9 @@ def refined_optimizers(profile: str, previous_report: dict[str, Any]) -> list[di
         p1 = spec.get("param1")
         p2 = spec.get("param2")
         if p1 and p1 in selected:
-            spec["values1"] = _numeric_refine(list(spec.get("values1") or []), selected[p1])
+            spec["values1"] = _bounded_numeric_refine(list(spec.get("values1") or []), selected[p1], str(p1))
         if p2 and p2 in selected:
-            spec["values2"] = _numeric_refine(list(spec.get("values2") or []), selected[p2])
+            spec["values2"] = _bounded_numeric_refine(list(spec.get("values2") or []), selected[p2], str(p2))
         out.append(spec)
     return out
 
