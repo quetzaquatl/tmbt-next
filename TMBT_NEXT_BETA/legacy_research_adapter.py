@@ -385,13 +385,15 @@ def activate() -> dict[str, Any]:
         }
 
     def full_history_splits(file_index):
-        """Preserve the 70/15/15 validation/holdout boundary, but screen faster.
+        """Preserve the 70/15/15 Validation/Holdout boundaries with an adaptive Development tail.
 
-        Quick mode never borrows dates from Validation or Holdout. It simply uses
-        the latest ~504 trading days *inside the existing Development partition*
-        for parameter search. This cuts the expensive optimizer scans sharply
-        without contaminating the locked partitions. Set TMBT_RESEARCH_QUICK=0
-        for the original full Development history.
+        Quick mode never borrows dates from Validation or Holdout. The default
+        Development screen remains 504 trading days, but sparse D1-H1-M5 TTFM
+        profiles receive 2016 Development days so the strict 200-trade gate can
+        be tested on a meaningful sample. H1 EBP receives 756 days because the
+        first strict-gate pass showed NQ H1 just below its 250-trade requirement.
+        These are Development-only window changes; Validation and Holdout dates
+        remain exactly at the original 70/15/15 boundaries.
         """
         if not file_index:
             raise ValueError("no_market_data")
@@ -403,9 +405,25 @@ def activate() -> dict[str, Any]:
         i85 = max(i70 + 1, min(n - 1, int(n * 0.85)))
         dev_start_i = 0
         split_mode = "full-history-70-15-15-v1"
-        if _quick_research_enabled() and i70 > 504:
-            dev_start_i = i70 - 504
-            split_mode = "quick-dev-tail-504d-preserve-val-holdout-v1"
+        if _quick_research_enabled():
+            profile_id = ""
+            try:
+                active_request = json.loads(
+                    research_autopilot.REQUEST_PATH.read_text(encoding="utf-8", errors="ignore")
+                )
+                profile_id = str((active_request or {}).get("profile") or "")
+            except Exception:
+                profile_id = ""
+
+            quick_dev_days = 504
+            if profile_id.endswith("_TTFM_D1_H1_M5"):
+                quick_dev_days = 2016
+            elif profile_id in {"NQ_EBP_H1", "ES_EBP_H1"}:
+                quick_dev_days = 756
+
+            if i70 > quick_dev_days:
+                dev_start_i = i70 - quick_dev_days
+                split_mode = f"quick-dev-tail-{quick_dev_days}d-adaptive-preserve-val-holdout-v2"
         return {
             "full_start": dates[0].isoformat(),
             "full_end": dates[-1].isoformat(),
